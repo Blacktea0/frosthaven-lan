@@ -32,7 +32,7 @@ public static class ExecutableManifest {
    if(resource==IntPtr.Zero)throw new Exception("Embedded manifest missing");
    var bytes=new byte[SizeofResource(module,resource)];
    Marshal.Copy(LockResource(LoadResource(module,resource)),bytes,0,bytes.Length);
-   return Encoding.UTF8.GetString(bytes);
+   return Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF');
   } finally { FreeLibrary(module); }
  }
 }
