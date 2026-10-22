@@ -1,0 +1,324 @@
+TYPE .GHNetworkCallbacks
+11605 StartDone
+11606 ShutdownBegin
+11607 CheckVersions
+11608 ConnectRequest
+12 newobj .<>c__DisplayClass3_0..ctor
+17 stloc.0 None
+18 ldloc.0 None
+19 ldarg.0 None
+20 stfld request
+25 call .FFSNetwork.get_IsOnline
+30 brfalse.s 39
+32 call .FFSNetwork.get_HasDesynchronized
+37 brfalse.s 58
+39 ldloc.0 None
+40 ldfld request
+45 ldc.i4.s 16
+47 newobj FFSNet.ConnectionErrorToken..ctor
+52 callvirt FFSNet.Backend.NetworkBackendConnectRequest.Refuse
+57 ret None
+58 ldloc.0 None
+59 ldfld request
+64 ldfld UserToken
+69 brtrue.s 90
+71 ldloc.0 None
+72 ldfld request
+77 ldc.i4.s 9
+79 newobj FFSNet.ConnectionErrorToken..ctor
+84 callvirt FFSNet.Backend.NetworkBackendConnectRequest.Refuse
+89 ret None
+90 ldloc.0 None
+91 ldfld request
+96 ldfld UserToken
+101 callvirt FFSNet.UserToken.get_Username
+106 ldloc.0 None
+107 ldfld request
+112 ldfld UserToken
+117 callvirt FFSNet.UserToken.get_GameVersion
+122 call .GHNetworkCallbacks.CheckVersions
+127 brtrue.s 147
+129 ldloc.0 None
+130 ldfld request
+135 ldc.i4.2 None
+136 newobj FFSNet.ConnectionErrorToken..ctor
+141 callvirt FFSNet.Backend.NetworkBackendConnectRequest.Refuse
+146 ret None
+147 call .GHNetworkCallbacks.PassesGHPlayerLimitationChecks
+152 brtrue.s 172
+154 ldloc.0 None
+155 ldfld request
+160 ldc.i4.4 None
+161 newobj FFSNet.ConnectionErrorToken..ctor
+166 callvirt FFSNet.Backend.NetworkBackendConnectRequest.Refuse
+171 ret None
+172 ldloc.0 None
+173 ldfld request
+178 ldfld UserToken
+183 ldsfld Empty
+188 ldloca.s local(0x0001)
+190 call .GHNetworkCallbacks.PassesBasicConnectionTests
+195 brtrue.s 210
+197 ldloc.0 None
+198 ldfld request
+203 ldloc.1 None
+204 callvirt FFSNet.Backend.NetworkBackendConnectRequest.Refuse
+209 ret None
+210 ldloc.0 None
+211 ldfld request
+216 ldfld UserToken
+221 callvirt FFSNet.UserToken.get_Username
+226 ldloc.0 None
+227 ldfld request
+232 ldfld UserToken
+237 callvirt FFSNet.UserToken.get_GameVersion
+242 call .GHNetworkCallbacks.CheckVersions
+247 brtrue.s 266
+249 ldloc.0 None
+250 ldfld request
+255 ldc.i4.2 None
+256 newobj FFSNet.ConnectionErrorToken..ctor
+261 callvirt FFSNet.Backend.NetworkBackendConnectRequest.Refuse
+266 call FFSNet.PlayerRegistry.get_ConnectingUsers
+271 ldloc.0 None
+272 ldfld request
+277 ldfld UserToken
+282 callvirt Add
+287 call FFSNet.PlayerRegistry.get_OnUserEnterRoom
+292 dup None
+293 brtrue.s 298
+295 pop None
+296 br.s 314
+298 ldloc.0 None
+299 ldfld request
+304 ldfld UserToken
+309 callvirt FFSNet.UserEnterEvent.Invoke
+314 call .GHNetworkCallbacks.GenerateGameToken
+319 stloc.2 None
+320 ldloc.2 None
+321 brtrue.s 414
+323 ldstr 'ERROR_MULTIPLAYER_00013'
+328 ldstr 'Error accepting a connection. Playing non-multiplayer game mode ('
+333 call .SaveData.get_Instance
+338 ldfld Global
+343 callvirt .GlobalData.get_GameMode
+348 stloc.3 None
+349 ldloca.s local(0x0003)
+351 constrained. EGameMode
+357 callvirt ToString
+362 ldstr '). Disconnecting.'
+367 call Concat
+372 call NetworkError
+377 ldc.i4.3 None
+378 newobj FFSNet.ConnectionErrorToken..ctor
+383 stloc.1 None
+384 ldnull None
+385 call .FFSNetwork.Shutdown
+390 call FFSNet.PlayerRegistry.get_ConnectingUsers
+395 ldloc.0 None
+396 ldftn .<>c__DisplayClass3_0.<ConnectRequest>b__0
+402 newobj .ctor
+407 callvirt RemoveAll
+412 pop None
+413 ret None
+414 ldc.i4.7 None
+415 newarr String
+420 dup None
+421 ldc.i4.0 None
+422 ldloc.0 None
+423 ldfld request
+428 ldfld UserToken
+433 callvirt FFSNet.UserToken.get_Username
+438 stelem.ref None
+439 dup None
+440 ldc.i4.1 None
+441 ldstr ' User connecting at phase '
+446 stelem.ref None
+447 dup None
+448 ldc.i4.2 None
+449 call FFSNet.ActionProcessor.get_CurrentPhase
+454 stloc.s local(0x0004)
+456 ldloca.s local(0x0004)
+458 constrained. ActionPhaseType
+464 callvirt ToString
+469 stelem.ref None
+470 dup None
+471 ldc.i4.3 None
+472 ldstr ' has to wait? '
+477 stelem.ref None
+478 dup None
+479 ldc.i4.4 None
+480 ldloc.2 None
+481 callvirt .GameToken.get_WaitUntilSavePoint
+486 stloc.s local(0x0005)
+488 ldloca.s local(0x0005)
+490 call ToString
+495 stelem.ref None
+496 dup None
+497 ldc.i4.5 None
+498 ldstr ', connecting '
+503 stelem.ref None
+504 dup None
+505 ldc.i4.6 None
+506 ldstr ','
+511 call FFSNet.PlayerRegistry.get_ConnectingUsers
+516 ldsfld <>9__3_1
+521 dup None
+522 brtrue.s 547
+524 pop None
+525 ldsfld <>9
+530 ldftn .<>c.<ConnectRequest>b__3_1
+536 newobj .ctor
+541 dup None
+542 stsfld <>9__3_1
+547 call token(0x2B0007A9)
+552 call Join
+557 stelem.ref None
+558 call Concat
+563 ldnull None
+564 call Info
+569 ldloc.0 None
+570 ldfld request
+575 callvirt FFSNet.Backend.NetworkBackendConnectRequest.Accept
+580 ret None
+11609 ShouldWaitForSavePoint
+11610 CheckForSavePointReached
+11611 GenerateGameToken
+11612 PassesGHPlayerLimitationChecks
+11613 InitializeGameState
+11614 SaveLatestProcessedActionIDToSaveFile
+11615 PassesBasicConnectionTests
+11616 OnEvent
+11617 OnEvent
+11618 OnEvent
+11619 OnEvent
+TYPE FFSNet.NetworkBehaviour
+33933 Awake
+33934 OnDestroy
+33935 OnApplicationFocus
+33936 .ctor
+TYPE FFSNet.ProtocolTokenUtils
+34232 ToRawByteArray
+34233 FromRawByteArray
+34234 ReadProtoclToken
+12 ldarg.0 None
+13 brfalse.s 19
+15 ldarg.0 None
+16 ldlen None
+17 brtrue.s 21
+19 ldnull None
+20 ret None
+21 ldarg.0 None
+22 newobj UdpKit.UdpPacket..ctor
+27 stloc.0 None
+28 ldloc.0 None
+29 call FFSNet.ProtocolTokenUtils.ReadProtocolToken
+34 stloc.1 None
+35 leave.s 47
+37 ldloc.0 None
+38 brfalse.s 46
+40 ldloc.0 None
+41 callvirt Dispose
+46 endfinally None
+47 ldloc.1 None
+48 ret None
+34235 ReadProtocolToken
+34236 WriteProtocolToken
+1 ldarg.1 None
+2 brtrue.s 16
+4 ldarg.0 None
+5 ldsfld Empty
+10 callvirt UdpKit.UdpPacket.WriteString
+15 ret None
+16 ldarg.0 None
+17 ldarg.1 None
+18 brtrue.s 23
+20 ldnull None
+21 br.s 34
+23 ldarg.1 None
+24 call GetType
+29 callvirt get_AssemblyQualifiedName
+34 callvirt UdpKit.UdpPacket.WriteString
+39 ldarg.1 None
+40 ldarg.0 None
+41 callvirt FFSNet.IProtocolToken.Write
+46 ret None
+34237 ToByteArrayWithType
+34238 .cctor
+TYPE FFSNet.UserToken
+34340 get_BuildType
+34341 set_BuildType
+34342 get_ServerPassword
+34343 set_ServerPassword
+34344 get_Username
+34345 set_Username
+34346 get_PlatformPlayerID
+34347 set_PlatformPlayerID
+34348 get_GameVersion
+34349 set_GameVersion
+34350 get_CurrentMod
+34351 set_CurrentMod
+34352 .ctor
+34353 .ctor
+34354 Write
+12 ldarg.1 None
+13 ldarg.0 None
+14 call FFSNet.UserToken.get_BuildType
+19 callvirt UdpKit.UdpPacket.WriteInt
+24 ldarg.1 None
+25 ldarg.0 None
+26 call FFSNet.UserToken.get_ServerPassword
+31 call get_ASCII
+36 callvirt UdpKit.UdpPacket.WriteString
+41 ldarg.1 None
+42 ldarg.0 None
+43 call FFSNet.UserToken.get_Username
+48 call get_UTF8
+53 callvirt UdpKit.UdpPacket.WriteString
+58 ldarg.1 None
+59 ldarg.0 None
+60 call FFSNet.UserToken.get_PlatformPlayerID
+65 call get_UTF8
+70 callvirt UdpKit.UdpPacket.WriteString
+75 ldarg.1 None
+76 ldarg.0 None
+77 call FFSNet.UserToken.get_GameVersion
+82 call get_ASCII
+87 callvirt UdpKit.UdpPacket.WriteString
+92 ldarg.1 None
+93 ldarg.0 None
+94 call FFSNet.UserToken.get_CurrentMod
+99 call get_ASCII
+104 callvirt UdpKit.UdpPacket.WriteString
+109 ret None
+34355 Read
+12 ldarg.0 None
+13 ldarg.1 None
+14 callvirt UdpKit.UdpPacket.ReadInt
+19 call FFSNet.UserToken.set_BuildType
+24 ldarg.0 None
+25 ldarg.1 None
+26 call get_ASCII
+31 callvirt UdpKit.UdpPacket.ReadString
+36 call FFSNet.UserToken.set_ServerPassword
+41 ldarg.0 None
+42 ldarg.1 None
+43 call get_UTF8
+48 callvirt UdpKit.UdpPacket.ReadString
+53 call FFSNet.UserToken.set_Username
+58 ldarg.0 None
+59 ldarg.1 None
+60 call get_UTF8
+65 callvirt UdpKit.UdpPacket.ReadString
+70 call FFSNet.UserToken.set_PlatformPlayerID
+75 ldarg.0 None
+76 ldarg.1 None
+77 call get_ASCII
+82 callvirt UdpKit.UdpPacket.ReadString
+87 call FFSNet.UserToken.set_GameVersion
+92 ldarg.0 None
+93 ldarg.1 None
+94 call get_ASCII
+99 callvirt UdpKit.UdpPacket.ReadString
+104 call FFSNet.UserToken.set_CurrentMod
+109 ret None

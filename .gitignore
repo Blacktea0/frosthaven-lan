@@ -1,0 +1,12 @@
+/target/
+/dist/
+/logs/
+/instances/
+*.pdb
+*.tmp
+*.pyc
+__pycache__/
+.vs/
+.idea/
+
+/artifacts/

@@ -1,0 +1,246 @@
+TYPE I2.Loc.LocalizationManager
+Void InitializeIfNeeded()
+System.String GetVersion()
+Int32 GetRequiredWebServiceVersion()
+System.String GetWebServiceURL(I2.Loc.LanguageSourceData)
+System.String get_CurrentLanguage()
+Void set_CurrentLanguage(System.String)
+System.String get_CurrentLanguageCode()
+Void set_CurrentLanguageCode(System.String)
+System.String get_CurrentRegion()
+Void set_CurrentRegion(System.String)
+System.String get_CurrentRegionCode()
+Void set_CurrentRegionCode(System.String)
+System.Globalization.CultureInfo get_CurrentCulture()
+Void SetLanguageAndCode(System.String, System.String, Boolean, Boolean)
+System.Globalization.CultureInfo CreateCultureForCode(System.String)
+Void EnableChangingCultureInfo(Boolean)
+Void SetCurrentCultureInfo()
+Void SelectStartupLanguage()
+Boolean HasLanguage(System.String, Boolean, Boolean, Boolean)
+System.String GetSupportedLanguage(System.String, Boolean)
+System.String GetLanguageCode(System.String)
+System.String GetLanguageFromCode(System.String, Boolean)
+System.Collections.Generic.List`1[System.String] GetAllLanguages(Boolean)
+System.Collections.Generic.List`1[System.String] GetAllLanguagesCode(Boolean, Boolean)
+Boolean IsLanguageEnabled(System.String)
+Void LoadCurrentLanguage()
+Void PreviewLanguage(System.String)
+Void AutoLoadGlobalParamManagers()
+Void ApplyLocalizationParams(System.String ByRef, Boolean)
+Void ApplyLocalizationParams(System.String ByRef, UnityEngine.GameObject, Boolean)
+Void ApplyLocalizationParams(System.String ByRef, System.Collections.Generic.Dictionary`2[System.String,System.Object], Boolean)
+Void ApplyLocalizationParams(System.String ByRef, _GetParam, Boolean)
+System.String GetLocalizationParam(System.String, UnityEngine.GameObject)
+System.String GetPluralType(System.Text.RegularExpressions.MatchCollection, System.String, _GetParam)
+System.String ApplyRTLfix(System.String)
+System.String ApplyRTLfix(System.String, Int32, Boolean)
+System.String FixRTL_IfNeeded(System.String, Int32, Boolean)
+Boolean IsRTL(System.String)
+Boolean UpdateSources()
+Void UnregisterDeletededSources()
+Void RegisterSceneSources()
+Void RegisterSourceInResources()
+Void AddSource(I2.Loc.LanguageSourceData)
+System.Collections.IEnumerator Delayed_Import_Google(I2.Loc.LanguageSourceData, Single, Boolean)
+Void RemoveSource(I2.Loc.LanguageSourceData)
+Boolean IsGlobalSource(System.String)
+I2.Loc.LanguageSourceData GetSourceContaining(System.String, Boolean)
+UnityEngine.Object FindAsset(System.String)
+Void ApplyDownloadedDataFromGoogle()
+System.String GetCurrentDeviceLanguage(Boolean)
+Void DetectDeviceLanguage()
+Void RegisterTarget(I2.Loc.ILocalizeTargetDescriptor)
+Void add_OnLocalizeEvent(OnLocalizeCallback)
+Void remove_OnLocalizeEvent(OnLocalizeCallback)
+System.String GetTranslation(System.String, Boolean, Int32, Boolean, Boolean, UnityEngine.GameObject, System.String)
+System.String GetTermTranslation(System.String, Boolean, Int32, Boolean, Boolean, UnityEngine.GameObject, System.String)
+Boolean TryGetTranslation(System.String, System.String ByRef, Boolean, Int32, Boolean, Boolean, UnityEngine.GameObject, System.String)
+T GetTranslatedObject[T](System.String, I2.Loc.Localize)
+T GetTranslatedObjectByTermName[T](System.String, I2.Loc.Localize)
+System.String GetAppName(System.String)
+Void LocalizeAll(Boolean)
+System.Collections.IEnumerator Coroutine_LocalizeAll()
+Void DoLocalizeAll(Boolean)
+System.Collections.Generic.List`1[System.String] GetCategories()
+System.Collections.Generic.List`1[System.String] GetTermsList(System.String)
+I2.Loc.TermData GetTermData(System.String)
+I2.Loc.TermData GetTermData(System.String, I2.Loc.LanguageSourceData ByRef)
+FIELD System.String mCurrentLanguage
+FIELD System.String mLanguageCode
+FIELD System.Globalization.CultureInfo mCurrentCulture
+FIELD Boolean mChangeCultureInfo
+FIELD Boolean IsRight2Left
+FIELD Boolean HasJoinedWords
+FIELD System.Collections.Generic.List`1[I2.Loc.ILocalizationParamsManager] ParamManagers
+FIELD System.String[] LanguagesRTL
+FIELD System.Collections.Generic.List`1[I2.Loc.LanguageSourceData] Sources
+FIELD System.String[] GlobalSources
+FIELD System.String mCurrentDeviceLanguage
+FIELD System.Collections.Generic.List`1[I2.Loc.ILocalizeTargetDescriptor] mLocalizeTargets
+FIELD OnLocalizeCallback OnLocalizeEvent
+FIELD Boolean mLocalizeIsScheduled
+FIELD Boolean mLocalizeIsScheduledWithForcedValue
+FIELD Boolean HighlightLocalizedTargets
+TYPE I2.Loc.LanguageSourceData
+UnityEngine.Object get_ownerObject()
+Void add_Event_OnSourceUpdateFromGoogle(fnOnSourceUpdated)
+Void remove_Event_OnSourceUpdateFromGoogle(fnOnSourceUpdated)
+Void Awake()
+Void OnDestroy()
+Boolean IsEqualTo(I2.Loc.LanguageSourceData)
+Boolean ManagerHasASimilarSource()
+Void ClearAllData()
+Boolean IsGlobalSource()
+Void Editor_SetDirty()
+Void UpdateAssetDictionary()
+UnityEngine.Object FindAsset(System.String)
+Boolean HasAsset(UnityEngine.Object)
+Void AddAsset(UnityEngine.Object)
+System.String Export_I2CSV(System.String, Char, Boolean)
+Void AppendI2Term(System.Text.StringBuilder, Int32, System.String, I2.Loc.TermData, Char, System.String)
+Void AppendI2Text(System.Text.StringBuilder, System.String)
+System.String Export_Language_to_Cache(Int32, Boolean)
+System.String Export_CSV(System.String, Char, Boolean)
+System.String Export_CSV2(System.String[], Char, Boolean)
+Void AppendTermShort(System.Text.StringBuilder, Int32, System.String, I2.Loc.TermData, System.String, Char)
+Void AppendTerm(System.Text.StringBuilder, Int32, System.String, I2.Loc.TermData, System.String, Char)
+Void AppendString(System.Text.StringBuilder, System.String, Char)
+Void AppendTranslation(System.Text.StringBuilder, System.String, Char, System.String)
+UnityEngine.Networking.UnityWebRequest Export_Google_CreateWWWcall(I2.Loc.eSpreadsheetUpdateMode)
+System.String Export_Google_CreateData()
+System.String Import_CSV(System.String, System.String, I2.Loc.eSpreadsheetUpdateMode, Char)
+System.String Import_I2CSV(System.String, System.String, I2.Loc.eSpreadsheetUpdateMode)
+System.String Import_CSV(System.String, System.Collections.Generic.List`1[System.String[]], I2.Loc.eSpreadsheetUpdateMode)
+Boolean ArrayContains(System.String, System.String[])
+I2.Loc.eTermType GetTermType(System.String)
+Void Import_Language_from_Cache(Int32, System.String, Boolean, Boolean)
+Void FreeUnusedLanguages()
+Void Import_Google_FromCache()
+Boolean IsNewerVersion(System.String, System.String)
+Void Import_Google(Boolean, Boolean)
+System.String GetSourcePlayerPrefName()
+System.Collections.IEnumerator Import_Google_Coroutine(Boolean)
+Void ApplyDownloadedDataOnSceneLoaded(UnityEngine.SceneManagement.Scene, UnityEngine.SceneManagement.LoadSceneMode)
+Void ApplyDownloadedDataFromGoogle()
+UnityEngine.Networking.UnityWebRequest Import_Google_CreateWWWcall(Boolean, Boolean)
+Boolean HasGoogleSpreadsheet()
+System.String Import_Google_Result(System.String, I2.Loc.eSpreadsheetUpdateMode, Boolean)
+Int32 GetLanguageIndex(System.String, Boolean, Boolean)
+I2.Loc.LanguageData GetLanguageData(System.String, Boolean)
+Boolean IsCurrentLanguage(Int32)
+Int32 GetLanguageIndexFromCode(System.String, Boolean, Boolean)
+Int32 GetCommonWordInLanguageNames(System.String, System.String)
+Boolean AreTheSameLanguage(System.String, System.String)
+System.String GetLanguageWithoutRegion(System.String)
+Void AddLanguage(System.String)
+Void AddLanguage(System.String, System.String)
+Void RemoveLanguage(System.String)
+System.Collections.Generic.List`1[System.String] GetLanguages(Boolean)
+System.Collections.Generic.List`1[System.String] GetLanguagesCode(Boolean, Boolean)
+Boolean IsLanguageEnabled(System.String)
+Void EnableLanguage(System.String, Boolean)
+Boolean AllowUnloadingLanguages()
+System.String GetSavedLanguageFileName(Int32)
+Void LoadLanguage(Int32, Boolean, Boolean, Boolean, Boolean)
+Void LoadAllLanguages(Boolean)
+Void UnloadLanguage(Int32)
+Void SaveLanguages(Boolean, eFileType)
+Boolean HasUnloadedLanguages()
+System.Collections.Generic.List`1[System.String] GetCategories(Boolean, System.Collections.Generic.List`1[System.String])
+System.String GetKeyFromFullTerm(System.String, Boolean)
+System.String GetCategoryFromFullTerm(System.String, Boolean)
+Void DeserializeFullTerm(System.String, System.String ByRef, System.String ByRef, Boolean)
+Void UpdateDictionary(Boolean)
+System.String GetTranslation(System.String, System.String, System.String, Boolean, Boolean)
+Boolean TryGetTranslation(System.String, System.String ByRef, System.String, System.String, Boolean, Boolean)
+Boolean TryGetFallbackTranslation(I2.Loc.TermData, System.String ByRef, Int32, System.String, Boolean)
+I2.Loc.TermData AddTerm(System.String)
+I2.Loc.TermData GetTermData(System.String, Boolean)
+Boolean ContainsTerm(System.String)
+System.Collections.Generic.List`1[System.String] GetTermsList(System.String)
+I2.Loc.TermData AddTerm(System.String, I2.Loc.eTermType, Boolean)
+Void RemoveTerm(System.String)
+Void ValidateFullTerm(System.String ByRef)
+FIELD I2.Loc.ILanguageSource owner
+FIELD Boolean UserAgreesToHaveItOnTheScene
+FIELD Boolean UserAgreesToHaveItInsideThePluginsFolder
+FIELD Boolean GoogleLiveSyncIsUptoDate
+FIELD Boolean mIsGlobalSource
+FIELD System.Collections.Generic.List`1[I2.Loc.TermData] mTerms
+FIELD Boolean CaseInsensitiveTerms
+FIELD System.Collections.Generic.Dictionary`2[System.String,I2.Loc.TermData] mDictionary
+FIELD MissingTranslationAction OnMissingTranslation
+FIELD System.String mTerm_AppName
+FIELD System.Collections.Generic.List`1[I2.Loc.LanguageData] mLanguages
+FIELD Boolean IgnoreDeviceLanguage
+FIELD eAllowUnloadLanguages _AllowUnloadingLanguages
+FIELD System.String Google_WebServiceURL
+FIELD System.String Google_SpreadsheetName
+FIELD System.String Google_LastUpdatedVersion
+FIELD eGoogleUpdateFrequency GoogleUpdateFrequency
+FIELD eGoogleUpdateFrequency GoogleInEditorCheckFrequency
+FIELD eGoogleUpdateSynchronization GoogleUpdateSynchronization
+FIELD Single GoogleUpdateDelay
+FIELD fnOnSourceUpdated Event_OnSourceUpdateFromGoogle
+FIELD System.Collections.Generic.List`1[UnityEngine.Object] Assets
+FIELD System.Collections.Generic.Dictionary`2[System.String,UnityEngine.Object] mAssetDictionary
+FIELD System.String mDelayedGoogleData
+FIELD System.String[] SkipSheets
+FIELD System.String EmptyCategory
+FIELD Char[] CategorySeparators
+TYPE I2.Loc.TermData
+System.String GetTranslation(Int32, System.String, Boolean)
+Void SetTranslation(Int32, System.String, System.String)
+Void RemoveSpecialization(System.String)
+Void RemoveSpecialization(Int32, System.String)
+Boolean IsAutoTranslated(Int32, Boolean)
+Void Validate()
+Boolean IsTerm(System.String, Boolean)
+Boolean HasSpecializations()
+System.Collections.Generic.List`1[System.String] GetAllSpecializations()
+FIELD System.String Term
+FIELD I2.Loc.eTermType TermType
+FIELD System.String Description
+FIELD System.String[] Languages
+FIELD Byte[] Flags
+FIELD System.String[] Languages_Touch
+TYPE I2.Loc.LanguageData
+Boolean IsEnabled()
+Void SetEnabled(Boolean)
+Boolean IsLoaded()
+Boolean CanBeUnloaded()
+Void SetLoaded(Boolean)
+Void SetCanBeUnLoaded(Boolean)
+FIELD System.String Name
+FIELD System.String Code
+FIELD Byte Flags
+FIELD Boolean Compressed
+TYPE TextLocalizedListener
+Void Initialize()
+Void Awake()
+Void OnDestroy()
+Void OnEnable()
+Void OnDisable()
+Void HandleOnLanguageChanged()
+Void OnLanguageChanged()
+Void SetTextKey(System.String)
+Void ClearText()
+Void SetTextKey(System.String, LocalizationParam[])
+Void SetParameters(System.Collections.Generic.Dictionary`2[System.String,System.String])
+Void SetParameters(LocalizationParam[])
+Void SetParametersFormatted(System.String[])
+System.String get_Item(System.String)
+Void set_Item(System.String, System.String)
+Void SetParam(System.String, UInt32)
+Void SetParam(System.String, Int32)
+Void SetParam(System.String, System.String)
+Void SetFormat(System.String)
+TMPro.TextMeshProUGUI get_Text()
+Void OnValidate()
+FIELD TMPro.TextMeshProUGUI text
+FIELD System.String key
+FIELD System.Collections.Generic.List`1[LocalizationParam] parameters
+FIELD System.String format
+FIELD Boolean invalidate
+FIELD System.String KEY_PARAM_NAME
