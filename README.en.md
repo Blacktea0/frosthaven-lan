@@ -65,6 +65,21 @@ cargo xtask run --pid <PID>
 
 `run` builds when no game process exists, then waits for startup. With a running game it uses the existing package. Use an administrator terminal. `cargo build --release --locked` alone builds only Rust components.
 
+## Development build and injection testing
+
+```text
+cargo xtask build-dev
+cargo xtask dev
+cargo xtask dev --pid <PID>
+cargo xtask test-managed
+```
+
+The dev build has separate Cargo output in `target/dev-build/` and a complete runtime in `dist-dev/`. Its `asInvoker` manifest does not request elevation. When no game is running, it launches `Frosthaven.exe` directly from the Steam-registered installation, without a Steam launch request. Game-side Steam identity initialization still applies; this does not bypass login or ownership checks. A non-elevated dev process cannot access an elevated game. Use `--pid` to select an existing instance.
+
+Cold-start injection now waits for the Mono root domain and the required game/Unity managed assemblies. Previously, Mono could be present before Unity assemblies appeared in the managed assembly list, causing installation to fail. Timeouts and Bootstrap failures include diagnostics. `test-managed` covers delayed loading, already loaded assemblies, and timeout handling without starting the game.
+
+`cargo xtask build` and `cargo xtask package` always build the production variant with dev features disabled. Production still requires administrator permission and requests game startup through Steam. Packaging reads only `dist/` and verifies `requireAdministrator`; dev files are never included in Release archives.
+
 ## Commands and recovery
 
 ```text

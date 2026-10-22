@@ -13,10 +13,10 @@ namespace FrosthavenLan {
   static bool pendingSwitch=true;
   static int frame; static readonly object LogLock=new object();
   static object originalBackend;
-  internal static Assembly Game { get { return AppDomain.CurrentDomain.GetAssemblies().Single(a=>a.GetName().Name=="Assembly-CSharp"); } }
+  internal static Assembly Game { get { return RuntimeAssemblies.Require("Assembly-CSharp"); } }
   static Type Enet { get { return Game.GetType("FFSNet.Backend.EnetNetworkBackend",true); } }
   static Type Eos { get { return Game.GetType("FFSNet.Backend.EOSNetworkBackend",true); } }
-  internal static Type Unity(string name) { return AppDomain.CurrentDomain.GetAssemblies().Single(a=>a.GetName().Name=="UnityEngine.CoreModule").GetType(name,true); }
+  internal static Type Unity(string name) { return RuntimeAssemblies.Require("UnityEngine.CoreModule").GetType(name,true); }
   internal static object[] FindObjects(Type type) { return (object[])Unity("UnityEngine.Resources").GetMethod("FindObjectsOfTypeAll",new[]{typeof(Type)}).Invoke(null,new object[]{type}); }
   static PropertyInfo BackendProperty(string name) { return Game.GetType("FFSNet.Backend.INetworkBackend",true).GetProperty(name); }
   static bool Running(object backend) { return (bool)BackendProperty("IsRunning").GetValue(backend,null); }
@@ -34,6 +34,7 @@ namespace FrosthavenLan {
   public static void Install() {
    if(harmony!=null) return;
    try {
+    RuntimeAssemblies.WaitFor(new[]{"Assembly-CSharp","UnityEngine.CoreModule"},120000,Log);
     harmony=new Harmony("local.frosthaven.lan.prototype");
     Type sync=Unity("UnityEngine.Object").Assembly.GetType("UnityEngine.UnitySynchronizationContext",true);
     harmony.Patch(AccessTools.Method(sync,"Exec"),postfix:new HarmonyMethod(typeof(Payload),"Pump"));
@@ -42,7 +43,7 @@ namespace FrosthavenLan {
     var ui=Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow",true);
     harmony.Patch(AccessTools.Method(ui,"AwakeInit"),postfix:new HarmonyMethod(typeof(Payload),"InputPatch"));
     LanText.Install(harmony);Log("INSTALLED patches; awaiting main thread");
-   } catch(Exception e){Log("INSTALL ERROR "+e);}
+   } catch(Exception e){Log("INSTALL ERROR "+e);if(harmony!=null){harmony.UnpatchAll(harmony.Id);harmony=null;}}
   }
   public static IEnumerable<CodeInstruction> SwapConstructor(IEnumerable<CodeInstruction> code) {
    int count=0;

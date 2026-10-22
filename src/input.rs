@@ -23,6 +23,7 @@ fn events() -> &'static Mutex<Receiver<bool>> {
     })
 }
 
+#[cfg(not(feature = "dev-launcher"))]
 pub fn enter_pressed() -> bool {
     matches!(events().lock().unwrap().try_recv(), Ok(true))
 }

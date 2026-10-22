@@ -1,16 +1,22 @@
 fn main() {
-    // Keep test harnesses runnable without UAC; distributed release binaries require elevation.
-    if std::env::var("PROFILE").as_deref() != Ok("release") {
+    let dev = std::env::var_os("CARGO_FEATURE_DEV_LAUNCHER").is_some();
+    // Keep ordinary test harnesses runnable without UAC.
+    if !dev && std::env::var("PROFILE").as_deref() != Ok("release") {
         return;
     }
-    println!("cargo:rerun-if-changed=app.manifest");
+    let manifest_name = if dev {
+        "app.dev.manifest"
+    } else {
+        "app.manifest"
+    };
+    println!("cargo:rerun-if-changed={manifest_name}");
     match std::env::var("CARGO_CFG_TARGET_ENV").as_deref() {
         Ok("msvc") => {
             println!("cargo:rustc-link-arg-bin=frosthaven-lan=/MANIFEST:EMBED");
             println!(
                 "cargo:rustc-link-arg-bin=frosthaven-lan=/MANIFESTINPUT:{}",
                 std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
-                    .join("app.manifest")
+                    .join(manifest_name)
                     .display()
             );
             println!("cargo:rustc-link-arg-bin=frosthaven-lan=/MANIFESTUAC:NO");
@@ -19,7 +25,7 @@ fn main() {
             let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
             let resource = out.join("manifest.rc");
             let manifest = std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
-                .join("app.manifest");
+                .join(manifest_name);
             std::fs::write(
                 &resource,
                 format!(

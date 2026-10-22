@@ -28,7 +28,7 @@ fn root() -> PathBuf {
         .to_path_buf()
 }
 
-fn build(root: &Path) -> Result<()> {
+fn build(root: &Path, dev: bool) -> Result<()> {
     if !win::game_pids()?.is_empty() {
         return Err("Close Frosthaven before rebuilding loaded DLLs".into());
     }
@@ -37,7 +37,7 @@ fn build(root: &Path) -> Result<()> {
     if !csc.is_file() {
         return Err(format!("C# compiler not found: {}", csc.display()).into());
     }
-    let dist = root.join("dist");
+    let dist = root.join(if dev { "dist-dev" } else { "dist" });
     println!("Supported game assembly SHA256: {}", config::HASH);
     fs::create_dir_all(&dist)?;
     for (source, name) in [
@@ -55,7 +55,11 @@ fn build(root: &Path) -> Result<()> {
         ("Bootstrap.dll", vec!["managed/Bootstrap.cs"]),
         (
             "LanPayload.dll",
-            vec!["managed/Payload.cs", "managed/LanText.cs"],
+            vec![
+                "managed/Payload.cs",
+                "managed/LanText.cs",
+                "managed/RuntimeAssemblies.cs",
+            ],
         ),
     ] {
         let mut command = Command::new(&csc);
@@ -75,30 +79,52 @@ fn build(root: &Path) -> Result<()> {
         run(command)?;
     }
     let mut cargo = Command::new(env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+    let target = root.join(if dev { "target/dev-build" } else { "target" });
     cargo
         .current_dir(root)
-        .env("CARGO_TARGET_DIR", root.join("target"))
-        .args([
-            "build",
-            "--release",
-            "--locked",
-            "--package",
-            "frosthaven-lan",
-        ]);
+        .env("CARGO_TARGET_DIR", &target)
+        .args(["build", "--locked", "--package", "frosthaven-lan"]);
+    if dev {
+        cargo.args(["--features", "dev-launcher"]);
+    } else {
+        cargo.args(["--release", "--no-default-features"]);
+    }
     run(cargo)?;
     fs::copy(
-        root.join("target/release/lanbridge.dll"),
+        target.join(if dev {
+            "debug/lanbridge.dll"
+        } else {
+            "release/lanbridge.dll"
+        }),
         dist.join("LanBridge.dll"),
     )?;
     fs::copy(
-        root.join("target/release/frosthaven-lan.exe"),
+        target.join(if dev {
+            "debug/frosthaven-lan.exe"
+        } else {
+            "release/frosthaven-lan.exe"
+        }),
         dist.join("frosthaven-lan.exe"),
     )?;
     println!("Complete runtime built in {}", dist.display());
     Ok(())
 }
+fn test_managed(root: &Path) -> Result<()> {
+    let csc = PathBuf::from(env::var_os("WINDIR").ok_or("WINDIR is missing")?)
+        .join(r"Microsoft.NET\Framework64\v4.0.30319\csc.exe");
+    fs::create_dir_all(root.join("target"))?;
+    let output = root.join("target/RuntimeAssembliesTests.exe");
+    let mut compiler = Command::new(csc);
+    compiler
+        .args(["/nologo", "/utf8output"])
+        .arg(format!("/out:{}", output.display()))
+        .arg(root.join(r"managed\RuntimeAssemblies.cs"))
+        .arg(root.join(r"tools\tests\RuntimeAssembliesTests.cs"));
+    run(compiler)?;
+    run(Command::new(output))
+}
 fn package(root: &Path) -> Result<()> {
-    build(root)?;
+    build(root, false)?;
     let mut command = Command::new("powershell.exe");
     command.current_dir(root).args([
         "-NoProfile",
@@ -108,8 +134,12 @@ fn package(root: &Path) -> Result<()> {
     ]);
     run(command)
 }
-fn tool(root: &Path, command: &str, args: &[String]) -> Result<()> {
-    let exe = root.join("dist/frosthaven-lan.exe");
+fn tool(root: &Path, dev: bool, command: &str, args: &[String]) -> Result<()> {
+    let exe = root.join(if dev {
+        "dist-dev/frosthaven-lan.exe"
+    } else {
+        "dist/frosthaven-lan.exe"
+    });
     if !exe.is_file() {
         return Err("Run cargo xtask build first".into());
     }
@@ -122,22 +152,30 @@ fn main() {
         let root = root();
         let args: Vec<String> = env::args().skip(1).collect();
         match args.first().map(String::as_str) {
-            Some("build") if args.len() == 1 => build(&root),
+            Some("build") if args.len() == 1 => build(&root, false),
+            Some("test-managed") if args.len() == 1 => test_managed(&root),
+            Some("build-dev") if args.len() == 1 => build(&root, true),
+            Some("dev") => {
+                if win::game_pids()?.is_empty() {
+                    build(&root, true)?;
+                }
+                tool(&root, true, "start", &args[1..])
+            }
             Some("package") if args.len() == 1 => package(&root),
             Some("run") => {
                 if win::game_pids()?.is_empty() {
-                    build(&root)?;
+                    build(&root, false)?;
                 }
-                tool(&root, "start", &args[1..])
+                tool(&root, false, "start", &args[1..])
             }
-            Some("verify") if args.len() == 1 => tool(&root, "verify", &[]),
+            Some("verify") if args.len() == 1 => tool(&root, false, "verify", &[]),
             Some("locate") if args.len() == 1 => {
                 println!("{}", discovery::locate()?.display());
                 Ok(())
             }
-            Some("command") if args.len() > 1 => tool(&root, "command", &args[1..]),
+            Some("command") if args.len() > 1 => tool(&root, false, "command", &args[1..]),
             None | Some("help" | "--help" | "-h") => {
-                println!("cargo xtask build\ncargo xtask package\ncargo xtask run [--pid PID]\ncargo xtask locate\ncargo xtask verify\ncargo xtask command <status|steam-status|restore>");
+                println!("cargo xtask build\ncargo xtask build-dev\ncargo xtask test-managed\ncargo xtask dev [--pid PID]\ncargo xtask package\ncargo xtask run [--pid PID]\ncargo xtask locate\ncargo xtask verify\ncargo xtask command <status|steam-status|restore>");
                 Ok(())
             }
             _ => Err("Unknown task or invalid arguments; use cargo xtask help".into()),

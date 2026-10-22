@@ -64,6 +64,21 @@ cargo xtask run --pid <PID>
 
 重复打开启动器会查询已加载补丁的状态；更新补丁或执行 restore 后需重启游戏才能重新启用。多个安装或多个运行实例存在歧义时，请先启动目标游戏并通过 `--pid` 选择。
 
+## 开发版与注入测试
+
+```text
+cargo xtask build-dev
+cargo xtask dev
+cargo xtask dev --pid <PID>
+cargo xtask test-managed
+```
+
+开发版单独构建到 `target/dev-build/`，完整运行文件放在 `dist-dev/`。它使用 `asInvoker` 清单，不请求管理员权限；没有现成游戏进程时直接启动 Steam 登记目录中的 `Frosthaven.exe`，无需通过 Steam 启动。Steam 身份初始化仍由游戏处理，开发版不会绕过登录或所有权检查；它也无法访问权限高于自身的游戏进程。已有进程时通过 `--pid` 选择。
+
+修复了冷启动注入时 Mono 已加载、但游戏/Unity 托管程序集尚未就绪的竞争条件。桥接会等待 Mono 根域，托管补丁会等待必需程序集加载，超时和 Bootstrap 失败会提供对应诊断。`test-managed` 测试延迟加载、已就绪和超时分支，不会启动游戏。
+
+`cargo xtask build` 和 `cargo xtask package` 始终构建正式版，不启用开发 feature，仍要求管理员权限并通过 Steam 请求启动。打包只读取 `dist/` 并验证 `requireAdministrator`，不会把 `dist-dev/` 放进 Release。
+
 ## 联机
 
 1. 双方使用相同游戏版本和补丁，并保证网络可达。

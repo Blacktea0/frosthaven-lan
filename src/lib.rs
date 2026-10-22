@@ -60,11 +60,23 @@ unsafe extern "system" fn worker(h: Handle) -> u32 {
         mono_runtime_invoke,
         unsafe extern "C" fn(Handle, Handle, *mut Handle, *mut Handle) -> Handle
     );
-    let d = mono_get_root_domain();
-    if d.is_null() {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    let d = loop {
+        let domain = mono_get_root_domain();
+        if !domain.is_null() {
+            break domain;
+        }
+        if std::time::Instant::now() >= deadline {
+            log("Mono root domain initialization timed out");
+            return 3;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    let t = mono_thread_attach(d);
+    if t.is_null() {
+        log("Mono thread attachment failed");
         return 3;
     }
-    let t = mono_thread_attach(d);
     let p = CString::new(dir.join("Bootstrap.dll").to_string_lossy().as_bytes()).unwrap();
     let a = mono_domain_assembly_open(d, p.as_ptr());
     if a.is_null() {
