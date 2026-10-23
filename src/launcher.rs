@@ -1,6 +1,6 @@
 use super::config::APP_ID;
 use super::{
-    discovery, inject, ipc, modules, ui, verify_game,
+    discovery, inject, ipc, modules, trace, ui, verify_game,
     win::{game_pids, is_elevated, open_steam_game},
     Result,
 };
@@ -63,9 +63,14 @@ fn launch_direct(game: &Path) -> Result<u32> {
     }
 }
 
-pub fn start(dir: &Path) -> Result<()> {
+pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
+    diagnostics.record("Checking for existing game processes");
     require_closed_game(&game_pids()?)?;
     let elevated = is_elevated()?;
+    diagnostics.record(format!(
+        "Launch mode: elevated={elevated}; runtime directory={}",
+        dir.display()
+    ));
     let mode_progress = ui::Progress::new(if elevated {
         ui::text("管理员模式启动中", "Starting in administrator mode")
     } else {
@@ -77,12 +82,20 @@ pub fn start(dir: &Path) -> Result<()> {
         "LanPayload.dll",
         "0Harmony.dll",
     ] {
+        diagnostics.record(format!(
+            "Runtime file {}: present={}",
+            dir.join(file).display(),
+            dir.join(file).is_file()
+        ));
         if !dir.join(file).is_file() {
             return Err(format!("Missing {file}; run cargo xtask build").into());
         }
     }
+    diagnostics.record("Locating Steam-registered Frosthaven installation");
     let game = discovery::locate()?;
-    verify_game(&game)?;
+    diagnostics.record(format!("Located game directory: {}", game.display()));
+    let hash = verify_game(&game)?;
+    diagnostics.record(format!("Game assembly SHA256 verified: {hash}"));
     drop(mode_progress);
     ui::line(format!(
         "{}{}",
@@ -91,8 +104,15 @@ pub fn start(dir: &Path) -> Result<()> {
     ));
     let pid = {
         let _progress = ui::Progress::new(ui::text("正在启动游戏中", "Starting the game"));
+        diagnostics.record(if elevated {
+            "Requesting Steam startup"
+        } else {
+            "Starting game EXE directly"
+        });
         wait_for_game(elevated, &game)?
     };
+    diagnostics.record(format!("Detected game PID {pid}; validating process path"));
+    diagnostics.connect(pid)?;
     let actual_game = discovery::for_process(pid)?;
     verify_game(&actual_game)?;
     let progress = ui::Progress::new(format!(
@@ -116,7 +136,7 @@ pub fn start(dir: &Path) -> Result<()> {
                     .downcast_ref::<std::io::Error>()
                     .is_some_and(|e| e.raw_os_error() == Some(5))
                 {
-                    return Err("Access to the game process was denied. Steam-launched games require administrator permission for injection. Close the game manually, then reopen this tool using Run as administrator.".into());
+                    return Err(trace::context("Access to the game process was denied while reading modules; close the game and reopen this tool as administrator", error));
                 }
                 // Toolhelp can temporarily report ERROR_BAD_LENGTH while the
                 // game is loading modules; retry only that transient failure.
@@ -131,6 +151,7 @@ pub fn start(dir: &Path) -> Result<()> {
             }
         };
         if loaded {
+            diagnostics.record("Mono runtime module detected");
             break;
         }
         if Instant::now() >= deadline {
@@ -139,23 +160,35 @@ pub fn start(dir: &Path) -> Result<()> {
         thread::sleep(Duration::from_millis(250));
     }
     unsafe {
-        inject(pid)?;
+        inject(pid, diagnostics)?;
     }
     let deadline = Instant::now() + Duration::from_secs(150);
+    let mut last_channel_error = None;
+    let mut last_state = None;
     loop {
         if !game_pids()?.contains(&pid) {
             return Err("Game exited after injection".into());
         }
-        if let Ok(channel) = ipc::Channel::open(pid) {
-            match channel.read(ipc::STARTUP).as_deref() {
-                Some("READY") => break,
-                Some(message) if message.starts_with("ERROR ") => {
-                    return Err(ui::diagnostic(&message[6..]).into())
+        match ipc::Channel::open(pid) {
+            Ok(channel) => {
+                last_state = channel.read(ipc::STARTUP);
+                match last_state.as_deref() {
+                    Some("READY") => {
+                        diagnostics.record("Managed game thread confirmed LAN backend readiness");
+                        break;
+                    }
+                    Some(message) if message.starts_with("ERROR ") => {
+                        return Err(message[6..].to_string().into())
+                    }
+                    _ => {}
                 }
-                _ => {}
+            }
+            Err(error) => {
+                last_channel_error = Some(error);
             }
         }
         if Instant::now() >= deadline {
+            diagnostics.record(format!("Last startup state: {last_state:?}; last shared-memory error: {last_channel_error:?}"));
             return Err(ui::text(
                 "等待网络组件初始化超时，请关闭游戏后重新打开本工具。",
                 "Network component initialization timed out. Close the game and reopen this tool.",
@@ -164,6 +197,7 @@ pub fn start(dir: &Path) -> Result<()> {
         }
         thread::sleep(Duration::from_millis(250));
     }
+    diagnostics.record("Initialization completed successfully");
     drop(progress);
     {
         let _progress = ui::Progress::new(ui::text(

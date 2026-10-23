@@ -55,7 +55,11 @@ fn build(root: &Path) -> Result<()> {
     for (output, sources) in [
         (
             "Bootstrap.dll",
-            vec!["managed/Bootstrap.cs", "managed/Session.cs"],
+            vec![
+                "managed/Bootstrap.cs",
+                "managed/Session.cs",
+                "managed/DiagnosticTrace.cs",
+            ],
         ),
         (
             "LanPayload.dll",
@@ -125,6 +129,9 @@ fn test_managed(root: &Path) -> Result<()> {
             .arg(format!("/out:{}", output.display()))
             .arg(root.join(format!("managed\\{source}.cs")))
             .arg(root.join(format!("tools\\tests\\{test}.cs")));
+        if source == "Session" {
+            compiler.arg(root.join(r"managed\DiagnosticTrace.cs"));
+        }
         if test == "LanUiTests" {
             compiler
                 .arg(root.join(r"managed\LanCopy.cs"))
@@ -141,6 +148,7 @@ fn test_managed(root: &Path) -> Result<()> {
         .args(["/nologo", "/utf8output"])
         .arg(format!("/out:{}", fixture.display()))
         .arg(root.join(r"managed\Session.cs"))
+        .arg(root.join(r"managed\DiagnosticTrace.cs"))
         .arg(root.join(r"tools\tests\SessionInterop.cs"));
     run(compiler)?;
     let native = root.join("target/SessionInteropNative.exe");

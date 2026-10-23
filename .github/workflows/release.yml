@@ -30,6 +30,8 @@ jobs:
         run: cargo +stable xtask test-managed
       - name: Build and verify portable ZIP
         run: cargo +stable xtask package
+      - name: Verify failure diagnostics and Enter-to-close behavior
+        run: ./tools/tests/LauncherFailureTests.ps1
       - name: Prepare bilingual release notes
         run: |
           $zh = (Get-Content README.md -Raw -Encoding utf8) -split '\r?\n\r?\n', 2

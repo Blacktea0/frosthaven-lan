@@ -29,7 +29,9 @@ namespace FrosthavenLan {
   public static void Install() {
    if(harmony!=null) return;
    try {
+    DiagnosticTrace.Write("Waiting for Assembly-CSharp and UnityEngine.CoreModule");
     RuntimeAssemblies.WaitFor(new[]{"Assembly-CSharp","UnityEngine.CoreModule"},120000);
+    DiagnosticTrace.Write("Runtime assemblies loaded; installing Harmony patches");
     harmony=new Harmony("local.frosthaven.lan.prototype");
     Type sync=Unity("UnityEngine.Object").Assembly.GetType("UnityEngine.UnitySynchronizationContext",true);
     harmony.Patch(AccessTools.Method(sync,"Exec"),postfix:new HarmonyMethod(typeof(Payload),"Pump"));
@@ -37,7 +39,7 @@ namespace FrosthavenLan {
     harmony.Patch(AccessTools.Method(init,"MoveNext"),transpiler:new HarmonyMethod(typeof(Payload),"SwapConstructor"));
     var ui=Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow",true);
     harmony.Patch(AccessTools.Method(ui,"AwakeInit"),postfix:new HarmonyMethod(typeof(Payload),"InputPatch"));
-    LanUi.Install(harmony);LanText.Install(harmony);
+    LanUi.Install(harmony);LanText.Install(harmony);DiagnosticTrace.Write("Harmony installation complete; waiting for game-thread network initialization");
    } catch(Exception e){Session.Report("INSTALL ERROR "+e);if(harmony!=null){harmony.UnpatchAll(harmony.Id);harmony=null;}}
   }
   public static IEnumerable<CodeInstruction> SwapConstructor(IEnumerable<CodeInstruction> code) {
@@ -61,10 +63,12 @@ namespace FrosthavenLan {
      var old=Backend.GetValue(null);
      if(Running(old)){Session.Report("REFUSED: active network session; pending switch cancelled");pendingSwitch=false;}
      else {
+      DiagnosticTrace.Write("Game thread switching backend from "+old.GetType().FullName);
       if(!Enet.IsInstanceOfType(old)){
        var lan=NewBackend(Enet,old);
        originalBackend=old;Backend.SetValue(null,lan);
       }
+      DiagnosticTrace.Write("Refreshing LAN version label, localized text and IP inputs");
       LanUi.SetEnabled(true);LanText.Refresh();pendingSwitch=false;
       foreach(var obj in FindObjects(Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow")))InputPatch(obj);
       Session.Report("BACKEND FFSNet.Backend.EnetNetworkBackend");

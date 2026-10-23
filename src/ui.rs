@@ -119,7 +119,7 @@ pub fn diagnostic(message: &str) -> String {
         "Steam startup timed out. Check Steam and reopen this tool." => "Steam 启动超时，请检查 Steam，并在关闭游戏后重新打开本工具。",
         "Direct game startup timed out" => "游戏启动超时，请关闭游戏后重新打开本工具。",
         "Target game exited" | "Game exited after injection" => "游戏已退出，请重新打开本工具。",
-        "Unsupported game assembly SHA256" => "游戏版本不受支持，请使用 README 中列出的游戏版本。",
+        _ if message.starts_with("Unsupported game assembly SHA256") => "游戏版本不受支持，请使用 README 中列出的游戏版本。",
         "Timed out waiting for the game Mono runtime to initialize." => "等待游戏运行时初始化超时，请关闭游戏后重新打开本工具。",
         "DLL did not load" => "网络组件加载失败，请关闭游戏后重新打开本工具。",
         "LoadLibrary timeout; remote buffer retained" => "网络组件加载超时，请关闭游戏后重新打开本工具。",
@@ -140,4 +140,12 @@ pub fn diagnostic(message: &str) -> String {
         _ => return message.to_owned(),
     };
     translated.to_owned()
+}
+
+pub fn pause_after_failure() {
+    println!(
+        "{}",
+        text("按 Enter 关闭窗口。", "Press Enter to close this window.")
+    );
+    let _ = io::stdin().read_line(&mut String::new());
 }

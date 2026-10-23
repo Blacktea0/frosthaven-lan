@@ -38,7 +38,7 @@
 
 如需启用 Steam 游戏内叠加界面，请使用管理员模式启动工具。如需通过 Steam 启动，请先关闭游戏，再以管理员身份运行工具，由工具发起启动；普通权限无法访问较高权限的游戏进程。直接启动仍需游戏完成 Steam 身份初始化，不绕过登录或所有权检查。
 
-Steam 启动请求后 3 分钟仍未检测到游戏会超时。两种模式都会自动开始启动，无需按 Enter；成功后等待十秒自动退出，Enter 仅用于失败后关闭独立控制台。README 说明 Steam 叠加界面的管理员启动方式，正常控制台只显示五个启动阶段。
+Steam 启动请求后 3 分钟仍未检测到游戏会超时。两种模式都会自动开始启动，无需按 Enter；成功后等待十秒自动退出，Enter 用于失败后关闭窗口，命令行入口同样会等待。README 说明 Steam 叠加界面的管理员启动方式，正常控制台只显示五个启动阶段。
 
 工具启动时以及发起游戏启动前都会检查是否存在游戏进程；如果已经运行，提示用户手动关闭所有实例后重新打开工具，不注入、不结束游戏，也不接管已有进程。已移除 `--pid` 和直接注入子命令。普通模式只注入本次创建的子进程；Steam 模式只在本次启动请求后等待新游戏进程，多实例歧义时拒绝继续。更新补丁或恢复原后端后，需要手动关闭游戏，再重新打开工具才能启用。
 
@@ -99,11 +99,13 @@ cargo xtask command restore
 网络组件注入成功，强制局域网联机模式已开启，十秒后将关闭该窗口
 ```
 
+为避免控制槽位长度限制截断异常，完整诊断通过独立命名管道 `FrosthavenLan-Diagnostics-<PID>` 传输，按 UTF-8 字节长度分帧，接收端保存完整记录后才回执。管道仅允许同一 Windows 用户与 SYSTEM 连接，使用 medium 完整性标签以支持普通权限游戏向同用户管理员启动器报告错误。正常成功路径不显示技术诊断；失败时停止收集并输出完整历史，避免停留窗口期间反复累积同一游戏异常。
+
 不生成 `launcher-error.log`、`native.log`、`bootstrap.log`、`payload.log` 或命令文件。原生桥接在游戏进程中建立 `Local\FrosthavenLan-<PID>` 内存映射，Bootstrap 和补丁共享该映射。独立槽位传递启动状态、命令请求和命令结果，使用序列号防止读取未完成的写入。命令请求携带唯一标识，结果匹配请求标识后显示在调用方控制台。
 
 只有主线程完成后端切换才发布 `READY`；后续普通诊断事件不会覆盖就绪状态。安装、Bootstrap 或主线程失败发布 `ERROR`，启动器直接显示错误。`status`、`steam-status` 和 `restore` 也通过内存通信，结果仅输出到控制台。游戏退出后由系统回收通信对象。游戏自身的正常日志、配置和存档写入不受影响。
 
-失败时保留控制台错误内容，手动关闭游戏后重新打开工具。独立控制台失败后等待 Enter，成功后显示转圈等待十秒再退出，游戏继续运行。
+失败时完整显示原始错误及其错误链、托管异常的内层异常与调用栈、Windows 错误码和分阶段诊断记录；本地化摘要不会替代原始错误。诊断记录保存在内存中，仅在失败时输出。手动关闭游戏后重新打开工具。所有启动入口失败后等待 Enter，成功后显示转圈等待十秒再退出，游戏继续运行。
 
 ## 网络与文案
 
@@ -162,4 +164,6 @@ ENet uses UDP 30000 and the client's invite-code field becomes a host-IPv4 field
 
 Version tags matching `Cargo.toml` trigger Windows CI formatting checks, Rust tests, managed readiness regression tests, production packaging, and Release publication. Both README warnings are repeated in release notes. Live injection and multiplayer testing remain separate from automated build verification. See the tables and commands above for the supported hash, runtime files, console behavior, and source layout.
 
-Console language follows the Windows user locale: Chinese locales use simplified Chinese, other locales fall back to English, and unavailable locale detection defaults to simplified Chinese. The five startup stages use animated spinners in a terminal and one static line each when redirected. Successful startup waits ten seconds and exits; a standalone console pauses for Enter only after failure. Startup status and correlated command responses travel through shared memory, not files. The game continues running after launcher exit.
+Console language follows the Windows user locale: Chinese locales use simplified Chinese, other locales fall back to English, and unavailable locale detection defaults to simplified Chinese. The five startup stages use animated spinners in a terminal and one static line each when redirected. Successful startup waits ten seconds and exits; every invocation waits for Enter after failure. Startup status and correlated command responses travel through shared memory, not files. The game continues running after launcher exit.
+
+Failure diagnostics retain raw errors, error chains, OS error codes, managed inner exceptions, and stack traces in a timestamped in-memory history. Full diagnostic records use a length-framed, acknowledged named pipe instead of the limited shared-memory status slot, so large Unicode traces are not truncated. The same Windows user and SYSTEM can access the pipe, including communication from a standard game to an elevated launcher. All launch modes wait for Enter after a failure; only success uses the ten-second automatic exit. No runtime log files are written.

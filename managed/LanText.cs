@@ -9,6 +9,6 @@ namespace FrosthavenLan {
    Translation=translated;__result=true;
   }
   public static void Install(Harmony harmony){harmony.Patch(AccessTools.Method(Manager,"TryGetTranslation"),postfix:new HarmonyMethod(typeof(LanText),"Translation"));}
-  public static void Refresh(){foreach(var obj in Payload.FindObjects(Payload.Game.GetType("TextLocalizedListener",true))){try{AccessTools.Method(obj.GetType(),"OnLanguageChanged").Invoke(obj,null);}catch(Exception){/* One stale listener must not prevent other UI text from refreshing. */}}Manager.GetMethod("LocalizeAll",new[]{typeof(bool)}).Invoke(null,new object[]{true});}
+  public static void Refresh(){foreach(var obj in Payload.FindObjects(Payload.Game.GetType("TextLocalizedListener",true))){try{AccessTools.Method(obj.GetType(),"OnLanguageChanged").Invoke(obj,null);}catch(Exception e){DiagnosticTrace.Write("Nonfatal text listener refresh failure: "+e);}}Manager.GetMethod("LocalizeAll",new[]{typeof(bool)}).Invoke(null,new object[]{true});}
  }
 }

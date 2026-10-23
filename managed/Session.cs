@@ -27,6 +27,7 @@ namespace FrosthavenLan {
    }return null;
   }
   public static void Report(string message) {
+   DiagnosticTrace.Write(message);
    lock(Gate) {
     if(output!=null){output.AppendLine(message);return;}
     if(message.StartsWith("BACKEND FFSNet.Backend.EnetNetworkBackend"))Write(Startup,"READY");
@@ -39,7 +40,7 @@ namespace FrosthavenLan {
     lastCommand=request;int split=request.IndexOf('|');if(split<0)return;
     string id=request.Substring(0,split);output=new StringBuilder();
     try{command(request.Substring(split+1));Write(Response,id+"|"+output);}
-    catch(Exception e){Write(Response,id+"|ERROR "+e);}
+    catch(Exception e){DiagnosticTrace.Write("COMMAND ERROR "+e);Write(Response,id+"|ERROR "+e);}
     finally{output=null;}
    }
   }

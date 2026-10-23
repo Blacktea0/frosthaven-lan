@@ -2,6 +2,7 @@ mod config;
 mod discovery;
 mod ipc;
 mod launcher;
+mod trace;
 mod ui;
 mod win;
 use config::HASH;
@@ -48,36 +49,42 @@ fn verify() -> Result<String> {
     verify_game(&discovery::locate()?)
 }
 fn verify_game(game: &Path) -> Result<String> {
-    let hash = format!(
-        "{:x}",
-        Sha256::digest(fs::read(
-            game.join(r"Frosthaven_Data\Managed\Assembly-CSharp.dll")
-        )?)
-    );
+    let assembly = game.join(r"Frosthaven_Data\Managed\Assembly-CSharp.dll");
+    let hash = format!("{:x}", Sha256::digest(fs::read(&assembly)?));
     if hash != HASH {
-        return Err("Unsupported game assembly SHA256".into());
+        return Err(format!(
+            "Unsupported game assembly SHA256\nAssembly: {}\nExpected: {HASH}\nActual: {hash}",
+            assembly.display()
+        )
+        .into());
     }
     Ok(hash)
 }
-unsafe fn inject(pid: u32) -> Result<()> {
+unsafe fn inject(pid: u32, diagnostics: &trace::Diagnostics) -> Result<()> {
+    diagnostics.record(format!(
+        "Injecting into PID {pid}: validating installation and assembly hash"
+    ));
     let game = discovery::for_process(pid)?;
     verify_game(&game)?;
+    diagnostics.record(format!("OpenProcess PID={pid}, access=0x43a"));
     let h = OpenProcess(0x43a, 0, pid);
     if h.is_null() {
         let error = std::io::Error::last_os_error();
         if error.raw_os_error() == Some(5) {
             return Err(
-                "Access to the game process was denied. Steam-launched games require administrator permission for injection. Close the game manually, then reopen this tool using Run as administrator."
-                    .into(),
+                trace::context("Access to the game process was denied. Close the game and reopen this tool as administrator", error),
             );
         }
-        return Err(error.into());
+        return Err(trace::context("OpenProcess failed", error));
     }
     let h = Owned(h);
     let mut name = vec![0u16; 32768];
     let mut len = name.len() as u32;
     if QueryFullProcessImageNameW(h.0, 0, name.as_mut_ptr(), &mut len) == 0 {
-        return Err(std::io::Error::last_os_error().into());
+        return Err(trace::context(
+            "QueryFullProcessImageNameW failed",
+            std::io::Error::last_os_error(),
+        ));
     }
     if !discovery::same_path(Path::new(&text(&name)), &game.join("Frosthaven.exe")) {
         return Err("Refusing non-target process".into());
@@ -93,6 +100,12 @@ unsafe fn inject(pid: u32) -> Result<()> {
         GetModuleHandleA(b"kernel32.dll\0".as_ptr()),
         b"LoadLibraryW\0".as_ptr(),
     ) as usize;
+    if load == 0 {
+        return Err(trace::context(
+            "GetProcAddress(LoadLibraryW) failed",
+            std::io::Error::last_os_error(),
+        ));
+    }
     let local = modules(std::process::id())?;
     let (owner, (base, _)) = local
         .iter()
@@ -106,14 +119,24 @@ unsafe fn inject(pid: u32) -> Result<()> {
             .ok_or("Non Unicode path")?,
     );
     let size = dll.len() * 2;
+    diagnostics.record(format!(
+        "LoadLibraryW remote address=0x{address:x}; bridge={}; UTF-16 buffer={size} bytes",
+        root()?.join("LanBridge.dll").display()
+    ));
     let mem = VirtualAllocEx(h.0, ptr::null_mut(), size, 0x3000, 4);
     if mem.is_null() {
-        return Err(std::io::Error::last_os_error().into());
+        return Err(trace::context(
+            "VirtualAllocEx failed",
+            std::io::Error::last_os_error(),
+        ));
     }
+    diagnostics.record("Remote buffer allocated; writing DLL path");
     if WriteProcessMemory(h.0, mem, dll.as_ptr().cast(), size, ptr::null_mut()) == 0 {
+        let error = std::io::Error::last_os_error();
         VirtualFreeEx(h.0, mem, 0, 0x8000);
-        return Err(std::io::Error::last_os_error().into());
+        return Err(trace::context("WriteProcessMemory failed", error));
     }
+    diagnostics.record("DLL path written; creating remote LoadLibraryW thread");
     let t = CreateRemoteThread(
         h.0,
         ptr::null_mut(),
@@ -124,20 +147,34 @@ unsafe fn inject(pid: u32) -> Result<()> {
         ptr::null_mut(),
     );
     if t.is_null() {
+        let error = std::io::Error::last_os_error();
         VirtualFreeEx(h.0, mem, 0, 0x8000);
-        return Err(std::io::Error::last_os_error().into());
+        return Err(trace::context("CreateRemoteThread failed", error));
     }
     let t = Owned(t);
-    if WaitForSingleObject(t.0, 15000) != 0 {
-        return Err("LoadLibrary timeout; remote buffer retained".into());
+    let wait = WaitForSingleObject(t.0, 15000);
+    let wait_error = (wait == u32::MAX).then(std::io::Error::last_os_error);
+    diagnostics.record(format!("Remote thread wait result=0x{wait:08x}"));
+    if let Some(error) = wait_error {
+        return Err(trace::context(
+            "WaitForSingleObject failed; remote buffer retained",
+            error,
+        ));
+    }
+    if wait != 0 {
+        return Err(format!(
+            "LoadLibrary timeout; remote buffer retained; wait result=0x{wait:08x}"
+        )
+        .into());
     }
     VirtualFreeEx(h.0, mem, 0, 0x8000);
     if !modules(pid)?.contains_key("lanbridge.dll") {
         return Err("DLL did not load".into());
     }
+    diagnostics.record("LanBridge.dll confirmed in target process module list");
     Ok(())
 }
-fn command(_dir: &Path, s: &str) -> Result<()> {
+fn command(_dir: &Path, s: &str, diagnostics: &mut trace::Diagnostics) -> Result<()> {
     if !matches!(s, "status" | "steam-status" | "restore") {
         return Err(ui::text(
             "支持的命令：status、steam-status、restore",
@@ -153,10 +190,11 @@ fn command(_dir: &Path, s: &str) -> Result<()> {
         )
         .into());
     };
-    let channel = ipc::Channel::open(*pid).map_err(|_| {
-        ui::text(
-            "游戏组件未就绪，请先使用本工具启动游戏。",
-            "Game components are not ready. Start the game with this tool first.",
+    diagnostics.connect(*pid)?;
+    let channel = ipc::Channel::open(*pid).map_err(|error| {
+        trace::context(
+            "Game components are not ready; opening the memory channel failed",
+            error,
         )
     })?;
     let id = format!(
@@ -193,14 +231,20 @@ fn main() {
     unsafe {
         SetConsoleOutputCP(65001);
     }
-    let double_click = std::env::args_os().len() == 1;
+    let mut diagnostics = trace::Diagnostics::default();
+    diagnostics.record(format!(
+        "Launcher v{} PID={} locale={:?}",
+        env!("CARGO_PKG_VERSION"),
+        std::process::id(),
+        ui::locale()
+    ));
     let result = (|| -> Result<()> {
         let args: Vec<String> = std::env::args().collect();
         let dir = root()?;
         match args.get(1).map(String::as_str) {
-            None => launcher::start(&dir),
-            Some("start") if args.len() == 2 => launcher::start(&dir),
-            Some("command") => command(&dir, &args[2..].join(" ")),
+            None => launcher::start(&dir, &mut diagnostics),
+            Some("start") if args.len() == 2 => launcher::start(&dir, &mut diagnostics),
+            Some("command") => command(&dir, &args[2..].join(" "), &mut diagnostics),
             Some("verify") => {
                 println!("{}", verify()?);
                 Ok(())
@@ -210,6 +254,9 @@ fn main() {
         }
     })();
     let failed = result.is_err();
+    if failed {
+        diagnostics.stop();
+    }
     if let Err(e) = &result {
         eprintln!(
             "{}{}",
@@ -217,17 +264,18 @@ fn main() {
             ui::diagnostic(&e.to_string())
         );
     }
-    if failed && double_click {
-        let mut pid = 0;
-        if unsafe { GetConsoleProcessList(&mut pid, 1) } == 1 {
-            println!(
-                "{}",
-                ui::text("按 Enter 关闭窗口。", "Press Enter to close this window.")
-            );
-            let _ = std::io::stdin().read_line(&mut String::new());
-        }
+    if let Err(error) = &result {
+        eprintln!(
+            "\n{}\n{}",
+            ui::text(
+                "完整错误与诊断日志（未截断）：",
+                "Full error and diagnostic trace (untruncated):"
+            ),
+            diagnostics.report(error.as_ref())
+        );
     }
     if failed {
+        ui::pause_after_failure();
         std::process::exit(1);
     }
 }

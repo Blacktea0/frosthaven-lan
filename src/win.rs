@@ -32,6 +32,45 @@ extern "system" {
     fn GetUserDefaultLocaleName(name: *mut u16, count: i32) -> i32;
     pub fn SetConsoleOutputCP(code_page: u32) -> i32;
     pub fn GetCurrentProcessId() -> u32;
+    pub fn CreateNamedPipeW(
+        name: *const u16,
+        access: u32,
+        mode: u32,
+        instances: u32,
+        out_size: u32,
+        in_size: u32,
+        timeout: u32,
+        attributes: Handle,
+    ) -> Handle;
+    pub fn ConnectNamedPipe(pipe: Handle, overlapped: Handle) -> i32;
+    pub fn DisconnectNamedPipe(pipe: Handle) -> i32;
+    pub fn FlushFileBuffers(file: Handle) -> i32;
+    pub fn CancelSynchronousIo(thread: Handle) -> i32;
+    pub fn LocalFree(memory: Handle) -> Handle;
+    pub fn CreateFileW(
+        name: *const u16,
+        access: u32,
+        share: u32,
+        attributes: Handle,
+        disposition: u32,
+        flags: u32,
+        template: Handle,
+    ) -> Handle;
+    pub fn WaitNamedPipeW(name: *const u16, timeout: u32) -> i32;
+    pub fn ReadFile(
+        file: Handle,
+        buffer: *mut u8,
+        count: u32,
+        read: *mut u32,
+        overlapped: Handle,
+    ) -> i32;
+    pub fn WriteFile(
+        file: Handle,
+        buffer: *const u8,
+        count: u32,
+        written: *mut u32,
+        overlapped: Handle,
+    ) -> i32;
     pub fn CreateFileMappingW(
         file: Handle,
         attributes: Handle,
@@ -67,7 +106,6 @@ extern "system" {
         id: *mut u32,
     ) -> Handle;
     pub fn WaitForSingleObject(h: Handle, ms: u32) -> u32;
-    pub fn GetConsoleProcessList(pids: *mut u32, count: u32) -> u32;
     pub fn GetModuleHandleA(name: *const u8) -> Handle;
     pub fn GetProcAddress(h: Handle, name: *const u8) -> *mut c_void;
     pub fn CreateToolhelp32Snapshot(flags: u32, pid: u32) -> Handle;
@@ -89,6 +127,13 @@ extern "system" {
 #[link(name = "advapi32")]
 extern "system" {
     fn OpenProcessToken(process: Handle, access: u32, token: *mut Handle) -> i32;
+    fn ConvertSidToStringSidW(sid: Handle, text: *mut *mut u16) -> i32;
+    pub fn ConvertStringSecurityDescriptorToSecurityDescriptorW(
+        text: *const u16,
+        revision: u32,
+        descriptor: *mut Handle,
+        size: *mut u32,
+    ) -> i32;
     fn GetTokenInformation(
         token: Handle,
         class: u32,
@@ -250,4 +295,34 @@ pub fn user_locale() -> Option<String> {
     let mut name = [0u16; 85];
     (unsafe { GetUserDefaultLocaleName(name.as_mut_ptr(), name.len() as i32) } > 0)
         .then(|| text(&name))
+}
+
+pub fn current_user_sid() -> std::io::Result<String> {
+    unsafe {
+        let mut token = std::ptr::null_mut();
+        if OpenProcessToken(-1isize as Handle, 0x0008, &mut token) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut bytes = 0;
+        GetTokenInformation(token, 1, std::ptr::null_mut(), 0, &mut bytes);
+        let mut data = vec![0u8; bytes as usize];
+        let ok = GetTokenInformation(token, 1, data.as_mut_ptr().cast(), bytes, &mut bytes);
+        let error = std::io::Error::last_os_error();
+        CloseHandle(token);
+        if ok == 0 {
+            return Err(error);
+        }
+        let sid = std::ptr::read_unaligned(data.as_ptr().cast::<Handle>());
+        let mut string_sid = std::ptr::null_mut();
+        if ConvertSidToStringSidW(sid, &mut string_sid) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut count = 0;
+        while *string_sid.add(count) != 0 {
+            count += 1;
+        }
+        let result = String::from_utf16_lossy(std::slice::from_raw_parts(string_sid, count));
+        LocalFree(string_sid.cast());
+        Ok(result)
+    }
 }
