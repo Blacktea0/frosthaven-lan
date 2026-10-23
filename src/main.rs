@@ -26,16 +26,40 @@ impl Drop for Owned {
 unsafe fn modules(pid: u32) -> Result<HashMap<String, (usize, u32)>> {
     let s = CreateToolhelp32Snapshot(0x18, pid);
     if s as isize == -1 {
-        return Err(std::io::Error::last_os_error().into());
+        return Err(trace::context(
+            format!("CreateToolhelp32Snapshot failed; PID={pid}, flags=0x18 (modules)"),
+            std::io::Error::last_os_error(),
+        ));
     }
     let s = Owned(s);
     let mut m: Module = std::mem::zeroed();
     m.size = std::mem::size_of::<Module>() as u32;
     let mut ok = Module32FirstW(s.0, &mut m);
     let mut out = HashMap::new();
+    if ok == 0 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() != Some(18) {
+            return Err(trace::context(
+                format!("Module32FirstW failed; PID={pid}"),
+                error,
+            ));
+        }
+    }
     while ok != 0 {
         out.insert(text(&m.name).to_lowercase(), (m.base, m.bytes));
         ok = Module32NextW(s.0, &mut m);
+        if ok == 0 {
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() != Some(18) {
+                return Err(trace::context(
+                    format!(
+                        "Module32NextW failed; PID={pid}, modules read={}",
+                        out.len()
+                    ),
+                    error,
+                ));
+            }
+        }
     }
     Ok(out)
 }

@@ -324,6 +324,16 @@ pub fn context(
         source: source.into(),
     })
 }
+pub fn os_error_code(mut error: &(dyn std::error::Error + 'static)) -> Option<i32> {
+    loop {
+        if let Some(error) = error.downcast_ref::<io::Error>() {
+            if let Some(code) = error.raw_os_error() {
+                return Some(code);
+            }
+        }
+        error = error.source()?;
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,5 +356,35 @@ mod tests {
         assert!(report.contains("code: 5"));
         assert!(report.contains("Caused by:"));
         assert!(report.contains("PID 42"));
+    }
+    #[test]
+    fn nested_context_preserves_os_error_classification_and_api_details() {
+        let error = context(
+            "Waiting for Mono; PID=42",
+            context(
+                "CreateToolhelp32Snapshot failed; flags=0x18",
+                io::Error::from_raw_os_error(24),
+            ),
+        );
+        assert_eq!(os_error_code(error.as_ref()), Some(24));
+        let report = Diagnostics::default().report(error.as_ref());
+        assert!(report.contains("CreateToolhelp32Snapshot"));
+        assert!(report.contains("code: 24"));
+        assert!(report.contains("PID=42"));
+        assert_eq!(
+            os_error_code(
+                context("Loading game modules", io::Error::from_raw_os_error(299)).as_ref()
+            ),
+            Some(299)
+        );
+        let error = context(
+            "QueryFullProcessImageNameW failed",
+            io::Error::from_raw_os_error(31),
+        );
+        assert_eq!(os_error_code(error.as_ref()), Some(31));
+        assert_eq!(
+            os_error_code(context("plain error", "no OS code").as_ref()),
+            None
+        );
     }
 }

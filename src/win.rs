@@ -232,11 +232,31 @@ pub fn registry_string(machine: bool, subkey: &str, name: &str, view: u32) -> Op
     (status == 0).then(|| text(&value))
 }
 
-pub fn process_path(pid: u32) -> std::io::Result<std::path::PathBuf> {
+#[derive(Debug)]
+struct ProcessPathError {
+    operation: String,
+    source: std::io::Error,
+}
+impl std::fmt::Display for ProcessPathError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.operation, self.source)
+    }
+}
+impl std::error::Error for ProcessPathError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
+    }
+}
+pub fn process_path(pid: u32) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     unsafe {
         let handle = OpenProcess(0x1000, 0, pid);
         if handle.is_null() {
-            return Err(std::io::Error::last_os_error());
+            return Err(Box::new(ProcessPathError {
+                operation: format!(
+                    "OpenProcess failed while querying process path; PID={pid}, access=0x1000"
+                ),
+                source: std::io::Error::last_os_error(),
+            }));
         }
         let mut buf = vec![0u16; 32768];
         let mut size = buf.len() as u32;
@@ -244,7 +264,10 @@ pub fn process_path(pid: u32) -> std::io::Result<std::path::PathBuf> {
         let error = std::io::Error::last_os_error();
         CloseHandle(handle);
         if ok == 0 {
-            return Err(error);
+            return Err(Box::new(ProcessPathError {
+                operation: format!("QueryFullProcessImageNameW failed; PID={pid}, flags=0, buffer capacity={}, returned size={size}", buf.len()),
+                source: error,
+            }));
         }
         Ok(std::path::PathBuf::from(text(&buf)))
     }

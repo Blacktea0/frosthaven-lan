@@ -113,8 +113,23 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
     };
     diagnostics.record(format!("Detected game PID {pid}; validating process path"));
     diagnostics.connect(pid)?;
-    let actual_game = discovery::for_process(pid)?;
-    verify_game(&actual_game)?;
+    diagnostics.record(format!(
+        "Resolving Steam installation for detected game PID {pid}"
+    ));
+    let actual_game = discovery::for_process(pid).map_err(|error| {
+        trace::context(
+            format!("Validating detected game process failed; PID={pid}"),
+            error,
+        )
+    })?;
+    diagnostics.record(format!(
+        "Process path validated; PID={pid}, installation={}",
+        actual_game.display()
+    ));
+    diagnostics.record("Rechecking detected game's assembly SHA256");
+    let hash = verify_game(&actual_game)
+        .map_err(|error| trace::context("Verifying detected game's assembly failed", error))?;
+    diagnostics.record(format!("Detected game assembly SHA256 verified: {hash}"));
     let progress = ui::Progress::new(format!(
         "{}{}{}",
         ui::text("检测到游戏进程 (PID:", "Game process detected (PID: "),
@@ -125,25 +140,28 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
         )
     ));
     let deadline = Instant::now() + Duration::from_secs(120);
+    diagnostics.record(format!(
+        "Waiting for Mono runtime; PID={pid}, timeout=120 seconds"
+    ));
+    let mut module_attempt = 0u32;
     loop {
-        if !game_pids()?.contains(&pid) {
+        module_attempt += 1;
+        if !game_pids().map_err(|error| trace::context(
+            format!("Enumerating game processes while waiting for Mono failed; target PID={pid}, attempt={module_attempt}"), error
+        ))?.contains(&pid) {
             return Err("Target game exited".into());
         }
         let loaded = match unsafe { modules(pid) } {
             Ok(modules) => modules.contains_key("mono-2.0-bdwgc.dll"),
             Err(error) => {
-                if error
-                    .downcast_ref::<std::io::Error>()
-                    .is_some_and(|e| e.raw_os_error() == Some(5))
-                {
+                diagnostics.record(format!("Module enumeration failed; PID={pid}, attempt={module_attempt}, elapsed={:?}; {error}", Duration::from_secs(120).saturating_sub(deadline.saturating_duration_since(Instant::now()))));
+                if trace::os_error_code(error.as_ref()) == Some(5) {
                     return Err(trace::context("Access to the game process was denied while reading modules; close the game and reopen this tool as administrator", error));
                 }
-                // Toolhelp can temporarily report ERROR_BAD_LENGTH while the
-                // game is loading modules; retry only that transient failure.
-                if error
-                    .downcast_ref::<std::io::Error>()
-                    .is_some_and(|e| e.raw_os_error() == Some(24))
-                {
+                // Toolhelp can report ERROR_BAD_LENGTH or ERROR_PARTIAL_COPY
+                // during early process/module initialization. Retry within the
+                // startup deadline, retaining every original failure in memory.
+                if matches!(trace::os_error_code(error.as_ref()), Some(24) | Some(299)) {
                     false
                 } else {
                     return Err(error);
@@ -153,6 +171,9 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
         if loaded {
             diagnostics.record("Mono runtime module detected");
             break;
+        }
+        if module_attempt == 1 || module_attempt % 20 == 0 {
+            diagnostics.record(format!("Mono runtime not yet loaded; PID={pid}, module enumeration attempt={module_attempt}"));
         }
         if Instant::now() >= deadline {
             return Err("Timed out waiting for the game Mono runtime to initialize.".into());
