@@ -40,7 +40,7 @@ namespace FrosthavenLan {
     harmony.Patch(AccessTools.Method(init,"MoveNext"),transpiler:new HarmonyMethod(typeof(Payload),"SwapConstructor"));
     var ui=Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow",true);
     harmony.Patch(AccessTools.Method(ui,"AwakeInit"),postfix:new HarmonyMethod(typeof(Payload),"InputPatch"));
-    LanText.Install(harmony);Log("INSTALLED patches; awaiting main thread");
+    LanUi.Install(harmony);LanText.Install(harmony);Log("INSTALLED patches; awaiting main thread");
    } catch(Exception e){Log("INSTALL ERROR "+e);if(harmony!=null){harmony.UnpatchAll(harmony.Id);harmony=null;}}
   }
   public static IEnumerable<CodeInstruction> SwapConstructor(IEnumerable<CodeInstruction> code) {
@@ -68,7 +68,7 @@ namespace FrosthavenLan {
        var lan=NewBackend(Enet,old);
        originalBackend=old;Backend.SetValue(null,lan);
       }
-      LanText.Refresh();pendingSwitch=false;
+      LanUi.SetEnabled(true);LanText.Refresh();pendingSwitch=false;
       foreach(var obj in FindObjects(Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow")))InputPatch(obj);
       Log("BACKEND "+Backend.GetValue(null).GetType().FullName+" main-thread="+Thread.CurrentThread.ManagedThreadId);
      }
@@ -94,7 +94,7 @@ namespace FrosthavenLan {
      originalBackend=eos;
     }
     if(originalBackend!=null){((IDisposable)current).Dispose();Backend.SetValue(null,originalBackend);}
-    harmony.UnpatchAll(harmony.Id);LanText.Refresh();Log("RESTORED; input settings revert on process exit");return;
+    LanUi.SetEnabled(false);harmony.UnpatchAll(harmony.Id);LanText.Refresh();Log("RESTORED; input settings revert on process exit");return;
    }
    throw new Exception("Unknown command");
   }

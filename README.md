@@ -9,6 +9,8 @@
 
 Windows x64 的 Frosthaven 局域网联机工具，通过内存注入启用游戏内置的 ENet 后端，不修改游戏安装文件。当前支持 **Retail 1.0.34121 Steam**。
 
+启用后主菜单版本号末尾显示 `LAN Enabled`，联机界面中的邀请码提示改为使用主机 IP。
+
 详细设计、命令和故障排查见 [PRODUCT.md](PRODUCT.md)。
 
 ## 如何使用

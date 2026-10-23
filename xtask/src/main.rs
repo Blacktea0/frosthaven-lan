@@ -62,6 +62,8 @@ fn build(root: &Path) -> Result<()> {
             vec![
                 "managed/Payload.cs",
                 "managed/LanText.cs",
+                "managed/LanCopy.cs",
+                "managed/LanUi.cs",
                 "managed/RuntimeAssemblies.cs",
             ],
         ),
@@ -106,9 +108,15 @@ fn test_managed(root: &Path) -> Result<()> {
     let csc = PathBuf::from(env::var_os("WINDIR").ok_or("WINDIR is missing")?)
         .join(r"Microsoft.NET\Framework64\v4.0.30319\csc.exe");
     fs::create_dir_all(root.join("target"))?;
+    fs::copy(
+        root.join("vendor/harmony/0Harmony.dll"),
+        root.join("target/0Harmony.dll"),
+    )?;
     for (test, source) in [
         ("RuntimeAssembliesTests", "RuntimeAssemblies"),
         ("SessionTests", "Session"),
+        ("LanCopyTests", "LanCopy"),
+        ("LanUiTests", "LanUi"),
     ] {
         let output = root.join(format!("target/{test}.exe"));
         let mut compiler = Command::new(&csc);
@@ -117,8 +125,15 @@ fn test_managed(root: &Path) -> Result<()> {
             .arg(format!("/out:{}", output.display()))
             .arg(root.join(format!("managed\\{source}.cs")))
             .arg(root.join(format!("tools\\tests\\{test}.cs")));
+        if test == "LanUiTests" {
+            compiler
+                .arg(root.join(r"managed\LanCopy.cs"))
+                .arg(format!("/r:{}", root.join("target/0Harmony.dll").display()));
+        }
         run(compiler)?;
-        run(Command::new(output))?;
+        let mut test = Command::new(output);
+        test.current_dir(root);
+        run(test)?;
     }
     let fixture = root.join("target/SessionInterop.exe");
     let mut compiler = Command::new(&csc);

@@ -109,18 +109,27 @@ cargo xtask command restore
 
 ENet 使用 **UDP 30000**。客户端以房主 IPv4 代替原邀请码输入；不附加端口。房主界面目前仍显示 `localhost`，其他电脑须使用房主实际 IP。
 
-补丁随游戏当前语言替换以下词条，语言文件保持原样：
+LAN 后端启用后，在主菜单 `VersionAndChangeLog.VersionText` 的原有版本号后追加 `LAN Enabled`。只修改界面显示，不改变实际游戏版本或联机版本校验。覆盖已经存在的主菜单、新建菜单及语言切换后的刷新，重复刷新不会叠加标记；恢复补丁时恢复当前语言对应的原始版本文本。
 
-| 词条 | 简体中文 |
+补丁随游戏当前语言覆盖所有已分析的邀请码文案，包括以下入口，语言文件保持原样：
+
+| 界面 | 简体中文文案 |
 | --- | --- |
-| `GUI_MULTIPLAYER_ENTER_INVITE_CODE` | 输入主机IP |
-| `GUI_MULTIPLAYER_HOSTGAME_CONFIRMATION_DESC` | 你想要建立多人局域网游戏吗？ |
+| 加入输入框 | 输入主机IP |
+| 邀请码字段标题 | 主机IP |
+| 复制按钮 | 复制主机IP（保留键盘/手柄提示图标） |
+| 生成邀请入口 | 使用主机IP |
+| 新旧加入界面说明 | 获取主机 IPv4，输入时不附加端口 |
+| 主菜单多人提示 | 使用主机IP加入多人局域网游戏 |
+| 开房帮助 | 创建会话后分享主机 IPv4，玩家加入后分配角色 |
+| 无效邀请码错误 | 主机IP无效 |
+| 开房确认 | 你想要建立多人局域网游戏吗？ |
 
 支持英语、德语、法语、意大利语、西班牙语、巴西葡萄牙语、匈牙利语、俄语、简体中文、繁体中文、日语和韩语。
 
 ## 验证与自动发布
 
-托管回归测试 `cargo xtask test-managed` 覆盖程序集延迟加载、已加载和超时路径，以及原生与托管进程之间的 Unicode 状态、请求关联和响应传输，不启动或注入游戏。Rust 代码通过 Cargo 测试命令检查；实机注入测试与多人联机测试需要单独执行。
+托管回归测试 `cargo xtask test-managed` 覆盖程序集延迟加载、已加载和超时路径，原生与托管进程之间的 Unicode 状态、请求关联和响应传输，以及全部邀请码词条覆盖、版本标记刷新/语言切换/恢复，不启动或注入游戏。Rust 代码通过 Cargo 测试命令检查；实机注入测试与多人联机测试需要单独执行。
 
 推送与 `Cargo.toml` 版本一致的 `v*` tag，会触发 Windows GitHub Actions，执行格式检查、Rust 测试、托管回归测试、正式 ZIP 构建及完整性校验，然后发布附带 ZIP 与 SHA256 的 GitHub Release。Release 描述重复双语 README 开头的误报警告。
 
@@ -149,7 +158,7 @@ One `asInvoker` launcher preserves caller permissions and queries the effective 
 
 Advanced commands include `start`, `locate`, `verify`, and `command <status|steam-status|restore>`. `start` requires the game to be closed, launches it, and confirms backend readiness. End multiplayer before restore. Runtime errors and command results go directly to the console through a process-lifetime named memory mapping; no log or command files are written. A loaded DLL alone does not confirm a ready LAN backend.
 
-ENet uses UDP 30000 and the client's invite-code field becomes a host-IPv4 field. Other computers must use the actual host IP rather than the host UI's `localhost`. Game text follows all 12 supported languages without modifying language files. Patches affect memory only; normal game configuration and save writes continue.
+ENet uses UDP 30000 and the client's invite-code field becomes a host-IPv4 field. Other computers must use the actual host IP rather than the host UI's `localhost`. All analyzed invite-code labels, copy/use buttons, join descriptions, tooltips, hosting help, and invalid-code messages use host-IP wording in all 12 supported languages without modifying language files. The main-menu version label gains a single `LAN Enabled` suffix only while the LAN patch is enabled; existing menus, newly created menus, language changes, and restore are handled without changing the real game version. Patches affect memory only; normal game configuration and save writes continue.
 
 Version tags matching `Cargo.toml` trigger Windows CI formatting checks, Rust tests, managed readiness regression tests, production packaging, and Release publication. Both README warnings are repeated in release notes. Live injection and multiplayer testing remain separate from automated build verification. See the tables and commands above for the supported hash, runtime files, console behavior, and source layout.
 

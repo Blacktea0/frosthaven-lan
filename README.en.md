@@ -9,6 +9,8 @@
 
 A Windows x64 LAN tool for Frosthaven. It enables the built-in ENet backend through in-memory injection without modifying installed game files. Currently supports **Retail 1.0.34121 Steam**.
 
+When enabled, the main menu version label ends with `LAN Enabled`, and invite-code UI text uses the host IP instead.
+
 See [PRODUCT.md](PRODUCT.md) for design details, advanced commands, and troubleshooting.
 
 ## How to use
