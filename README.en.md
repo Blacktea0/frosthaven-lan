@@ -30,8 +30,9 @@ Startup stages use an animated spinner. Console language follows the Windows loc
 ## Development requirements
 
 - Windows x64.
-- Rust stable with the `x86_64-pc-windows-msvc` toolchain.
-- Visual Studio C++ Build Tools with MSVC and the Windows SDK.
+- Rust stable, using your configured default toolchain with either setup:
+  - MSVC: `x86_64-pc-windows-msvc` plus Visual Studio C++ Build Tools and the Windows SDK (including `kernel32.lib`).
+  - GNU: `x86_64-pc-windows-gnu` plus MinGW-w64/GCC, with `gcc` and `windres` on PATH.
 - Windows .NET Framework C# compiler: `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`.
 - Windows PowerShell for ZIP packaging.
 

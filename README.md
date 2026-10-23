@@ -30,8 +30,9 @@ Windows x64 的 Frosthaven 局域网联机工具，通过内存注入启用游�
 ## 开发环境需求
 
 - Windows x64。
-- Rust stable，`x86_64-pc-windows-msvc` 工具链。
-- Visual Studio C++ Build Tools，包含 MSVC 和 Windows SDK。
+- Rust stable，沿用本机默认工具链，支持以下任一组合：
+  - MSVC：`x86_64-pc-windows-msvc`，配套 Visual Studio C++ Build Tools 和 Windows SDK（包含 `kernel32.lib`）。
+  - GNU：`x86_64-pc-windows-gnu`，配套 MinGW-w64/GCC，确保 `gcc` 和 `windres` 在 PATH 中。
 - Windows .NET Framework C# 编译器：`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`。
 - 系统 PowerShell，用于 ZIP 打包。
 

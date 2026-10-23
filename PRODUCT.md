@@ -54,7 +54,7 @@ LanPayload.dll
 0Harmony.dll
 ```
 
-Rust 负责启动、注入、Mono 桥接与任务管理；C# 通过运行时反射解析游戏类型，因此编译无需本机游戏程序集。Windows x64 MSVC 为正式发布目标，原生 C 运行库静态链接。构建前需要退出游戏，避免覆盖已加载的 DLL。
+Rust 负责启动、注入、Mono 桥接与任务管理；C# 通过运行时反射解析游戏类型，因此编译无需本机游戏程序集。GitHub Actions 使用 Windows x64 MSVC 发布构建；本地支持 MSVC 或 GNU，沿用本机配置的默认工具链，原生 C 运行库静态链接。MSVC 必须安装 Windows SDK 链接库（包括 `kernel32.lib`），GNU 需要 GCC 与 `windres`。构建前需要退出游戏，避免覆盖已加载的 DLL。
 
 `cargo xtask package` 使用统一的 release 构建，只从 `dist/` 按明确文件列表生成 ZIP，附带双语 README、`PRODUCT.md` 与 Harmony 许可证，不包含运行状态文件。产物为：
 
