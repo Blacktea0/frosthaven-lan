@@ -1,7 +1,9 @@
 mod config;
 mod discovery;
 mod input;
+mod ipc;
 mod launcher;
+mod ui;
 mod win;
 use config::HASH;
 use sha2::{Digest, Sha256};
@@ -134,22 +136,64 @@ unsafe fn inject(pid: u32) -> Result<()> {
     if !modules(pid)?.contains_key("lanbridge.dll") {
         return Err("DLL did not load".into());
     }
-    println!("Rust injector: loaded into Frosthaven PID {pid}");
     Ok(())
 }
-fn log(dir: &Path) -> String {
-    fs::read_to_string(dir.join("payload.log")).unwrap_or_default()
-}
-fn command(dir: &Path, s: &str) -> Result<()> {
+fn command(_dir: &Path, s: &str) -> Result<()> {
     if !matches!(s, "status" | "steam-status" | "restore") {
-        return Err("Supported commands: status, steam-status, restore".into());
+        return Err(ui::text(
+            "支持的命令：status、steam-status、restore",
+            "Supported commands: status, steam-status, restore",
+        )
+        .into());
     }
-    let p = dir.join("command.rust.tmp");
-    fs::write(&p, s)?;
-    fs::rename(p, dir.join("command.txt"))?;
-    Ok(())
+    let pids = game_pids()?;
+    let [pid] = pids.as_slice() else {
+        return Err(ui::text(
+            "未找到唯一的游戏进程，无法发送命令。",
+            "A single running game is required to send a command.",
+        )
+        .into());
+    };
+    let channel = ipc::Channel::open(*pid).map_err(|_| {
+        ui::text(
+            "游戏组件未就绪，请先使用本工具启动游戏。",
+            "Game components are not ready. Start the game with this tool first.",
+        )
+    })?;
+    let id = format!(
+        "{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    );
+    channel.write(ipc::REQUEST, &format!("{id}|{s}"));
+    let prefix = format!("{id}|");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    loop {
+        if let Some(response) = channel.read(ipc::RESPONSE) {
+            if let Some(text) = response.strip_prefix(&prefix) {
+                if let Some(error) = text.strip_prefix("ERROR ") {
+                    return Err(error.to_string().into());
+                }
+                println!("{}", ui::diagnostic(text));
+                return Ok(());
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(ui::text(
+                "等待游戏命令响应超时。",
+                "Timed out waiting for the game command response.",
+            )
+            .into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }
 fn main() {
+    unsafe {
+        SetConsoleOutputCP(65001);
+    }
     let double_click = std::env::args_os().len() == 1;
     let result = (|| -> Result<()> {
         let args: Vec<String> = std::env::args().collect();
@@ -168,21 +212,19 @@ fn main() {
     })();
     let failed = result.is_err();
     if let Err(e) = &result {
-        eprintln!("{e}");
-        if double_click {
-            if let Ok(dir) = root() {
-                let _ = fs::write(dir.join("launcher-error.log"), e.to_string());
-            }
-        }
+        eprintln!(
+            "{}{}",
+            ui::text("错误：", "Error: "),
+            ui::diagnostic(&e.to_string())
+        );
     }
-    if double_click {
+    if failed && double_click {
         let mut pid = 0;
         if unsafe { GetConsoleProcessList(&mut pid, 1) } == 1 {
-            if failed {
-                println!("Press Enter to close this window.");
-            } else {
-                println!("Press Enter to close this window. The game will keep running.");
-            }
+            println!(
+                "{}",
+                ui::text("按 Enter 关闭窗口。", "Press Enter to close this window.")
+            );
             input::wait_for_enter();
         }
     }

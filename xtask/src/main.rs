@@ -53,7 +53,10 @@ fn build(root: &Path) -> Result<()> {
         dist.join("0Harmony.dll"),
     )?;
     for (output, sources) in [
-        ("Bootstrap.dll", vec!["managed/Bootstrap.cs"]),
+        (
+            "Bootstrap.dll",
+            vec!["managed/Bootstrap.cs", "managed/Session.cs"],
+        ),
         (
             "LanPayload.dll",
             vec![
@@ -71,6 +74,7 @@ fn build(root: &Path) -> Result<()> {
             .arg(format!("/out:{}", dist.join(output).display()));
         if output == "LanPayload.dll" {
             command.arg(format!("/r:{}", dist.join("0Harmony.dll").display()));
+            command.arg(format!("/r:{}", dist.join("Bootstrap.dll").display()));
         }
         for source in sources {
             // Framework csc interprets relative forward slashes as options and
@@ -102,16 +106,44 @@ fn test_managed(root: &Path) -> Result<()> {
     let csc = PathBuf::from(env::var_os("WINDIR").ok_or("WINDIR is missing")?)
         .join(r"Microsoft.NET\Framework64\v4.0.30319\csc.exe");
     fs::create_dir_all(root.join("target"))?;
-    let output = root.join("target/RuntimeAssembliesTests.exe");
-    let mut compiler = Command::new(csc);
+    for (test, source) in [
+        ("RuntimeAssembliesTests", "RuntimeAssemblies"),
+        ("SessionTests", "Session"),
+    ] {
+        let output = root.join(format!("target/{test}.exe"));
+        let mut compiler = Command::new(&csc);
+        compiler
+            .args(["/nologo", "/utf8output"])
+            .arg(format!("/out:{}", output.display()))
+            .arg(root.join(format!("managed\\{source}.cs")))
+            .arg(root.join(format!("tools\\tests\\{test}.cs")));
+        run(compiler)?;
+        run(Command::new(output))?;
+    }
+    let fixture = root.join("target/SessionInterop.exe");
+    let mut compiler = Command::new(&csc);
     compiler
         .args(["/nologo", "/utf8output"])
-        .arg(format!("/out:{}", output.display()))
-        .arg(root.join(r"managed\RuntimeAssemblies.cs"))
-        .arg(root.join(r"tools\tests\RuntimeAssembliesTests.cs"));
+        .arg(format!("/out:{}", fixture.display()))
+        .arg(root.join(r"managed\Session.cs"))
+        .arg(root.join(r"tools\tests\SessionInterop.cs"));
     run(compiler)?;
-    run(Command::new(output))
+    let native = root.join("target/SessionInteropNative.exe");
+    let rustc = PathBuf::from(env::var_os("CARGO").unwrap_or_else(|| "cargo.exe".into()))
+        .with_file_name("rustc.exe");
+    let mut compiler = Command::new(rustc);
+    compiler
+        .args(["--edition=2021", "-C", "target-feature=+crt-static"])
+        .arg(root.join("tools/tests/SessionInterop.rs"))
+        .arg("-o")
+        .arg(&native);
+    run(compiler)?;
+    let mut test = Command::new(native);
+    test.arg(fixture);
+    run(test)?;
+    Ok(())
 }
+
 fn package(root: &Path) -> Result<()> {
     build(root)?;
     let mut command = Command::new("powershell.exe");

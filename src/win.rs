@@ -29,6 +29,21 @@ pub struct Process {
 }
 #[link(name = "kernel32")]
 extern "system" {
+    fn GetUserDefaultLocaleName(name: *mut u16, count: i32) -> i32;
+    pub fn SetConsoleOutputCP(code_page: u32) -> i32;
+    pub fn GetCurrentProcessId() -> u32;
+    pub fn CreateFileMappingW(
+        file: Handle,
+        attributes: Handle,
+        protect: u32,
+        high: u32,
+        low: u32,
+        name: *const u16,
+    ) -> Handle;
+    pub fn OpenFileMappingW(access: u32, inherit: i32, name: *const u16) -> Handle;
+    pub fn MapViewOfFile(mapping: Handle, access: u32, high: u32, low: u32, bytes: usize)
+        -> Handle;
+    pub fn UnmapViewOfFile(address: *const c_void) -> i32;
     pub fn OpenProcess(access: u32, inherit: i32, pid: u32) -> Handle;
     pub fn CloseHandle(h: Handle) -> i32;
     pub fn QueryFullProcessImageNameW(h: Handle, flags: u32, name: *mut u16, size: *mut u32)
@@ -229,4 +244,10 @@ mod tests {
         super::is_elevated()
             .expect("The current process token must support TokenElevation queries");
     }
+}
+
+pub fn user_locale() -> Option<String> {
+    let mut name = [0u16; 85];
+    (unsafe { GetUserDefaultLocaleName(name.as_mut_ptr(), name.len() as i32) } > 0)
+        .then(|| text(&name))
 }

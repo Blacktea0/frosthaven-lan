@@ -207,7 +207,7 @@ pub fn locate() -> Result<PathBuf> {
     match games.len() {
         0 => Err("Frosthaven was not found in Steam libraries. Install the game through Steam first.".into()),
         1 => Ok(games.remove(0)),
-        _ => Err("Multiple Frosthaven installations found. Start the intended game before running this tool.".into()),
+        _ => Err("Multiple Frosthaven installations found. Keep only the intended Steam installation registered before reopening this tool.".into()),
     }
 }
 pub fn for_process(pid: u32) -> Result<PathBuf> {

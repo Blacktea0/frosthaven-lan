@@ -1,7 +1,7 @@
+mod ipc;
 mod win;
 use std::{
     ffi::{c_void, CString},
-    io::Write,
     path::PathBuf,
     ptr,
 };
@@ -13,25 +13,23 @@ unsafe fn directory(h: Handle) -> PathBuf {
 }
 unsafe extern "system" fn worker(h: Handle) -> u32 {
     let dir = directory(h);
-    let log = |s: &str| {
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(dir.join("native.log"))
-        {
-            let _ = writeln!(f, "{s}");
-        }
+    // Keep the mapping alive for the game's lifetime, including native startup failures.
+    let channel = match ipc::Channel::create(GetCurrentProcessId()) {
+        Ok(channel) => Box::leak(Box::new(channel)),
+        Err(_) => return 1,
     };
+    channel.write(ipc::STARTUP, "PENDING");
+    let fail = |s: &str| channel.write(ipc::STARTUP, &format!("ERROR {s}"));
     let m = GetModuleHandleA(b"mono-2.0-bdwgc.dll\0".as_ptr());
     if m.is_null() {
-        log("Mono missing");
+        fail("Mono missing");
         return 1;
     }
     macro_rules! load {
         ($name:ident,$ty:ty) => {
             let p = GetProcAddress(m, concat!(stringify!($name), "\0").as_ptr());
             if p.is_null() {
-                log(concat!("Missing ", stringify!($name)));
+                fail(concat!("Missing ", stringify!($name)));
                 return 2;
             }
             let $name: $ty = std::mem::transmute(p);
@@ -67,20 +65,20 @@ unsafe extern "system" fn worker(h: Handle) -> u32 {
             break domain;
         }
         if std::time::Instant::now() >= deadline {
-            log("Mono root domain initialization timed out");
+            fail("Mono root domain initialization timed out");
             return 3;
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     };
     let t = mono_thread_attach(d);
     if t.is_null() {
-        log("Mono thread attachment failed");
+        fail("Mono thread attachment failed");
         return 3;
     }
     let p = CString::new(dir.join("Bootstrap.dll").to_string_lossy().as_bytes()).unwrap();
     let a = mono_domain_assembly_open(d, p.as_ptr());
     if a.is_null() {
-        log("Bootstrap load failed");
+        fail("Bootstrap load failed");
         mono_thread_detach(t);
         return 4;
     }
@@ -99,11 +97,9 @@ unsafe extern "system" fn worker(h: Handle) -> u32 {
         mono_runtime_invoke(method, ptr::null_mut(), ptr::null_mut(), &mut ex);
     }
     let success = !method.is_null() && ex.is_null();
-    log(if success {
-        "Rust bridge: Bootstrap invoked"
-    } else {
-        "Managed entry failed"
-    });
+    if !success {
+        fail("Managed entry failed");
+    }
     mono_thread_detach(t);
     if success {
         0

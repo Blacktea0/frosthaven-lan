@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
@@ -8,10 +7,9 @@ using System.Threading;
 using HarmonyLib;
 namespace FrosthavenLan {
  public static class Payload {
-  static readonly string Dir=Path.GetDirectoryName(typeof(Payload).Assembly.Location);
   static Harmony harmony;
   static bool pendingSwitch=true;
-  static int frame; static readonly object LogLock=new object();
+  static int frame;
   static object originalBackend;
   internal static Assembly Game { get { return RuntimeAssemblies.Require("Assembly-CSharp"); } }
   static Type Enet { get { return Game.GetType("FFSNet.Backend.EnetNetworkBackend",true); } }
@@ -30,7 +28,7 @@ namespace FrosthavenLan {
   const BindingFlags All=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Static|BindingFlags.Instance;
   static object Prop(string n) { return Net.GetProperty(n,All).GetValue(null,null); }
   static FieldInfo Backend { get { return Net.GetField("_backend",All); } }
-  public static void Log(string s){lock(LogLock){using(var fs=new FileStream(Path.Combine(Dir,"payload.log"),FileMode.Append,FileAccess.Write,FileShare.ReadWrite|FileShare.Delete))using(var writer=new StreamWriter(fs)){writer.WriteLine(DateTime.UtcNow.ToString("o")+" "+s);}}}
+  public static void Log(string s){Session.Report(s);}
   public static void Install() {
    if(harmony!=null) return;
    try {
@@ -70,16 +68,15 @@ namespace FrosthavenLan {
        var lan=NewBackend(Enet,old);
        originalBackend=old;Backend.SetValue(null,lan);
       }
-      LanText.Refresh();pendingSwitch=false;Log("BACKEND "+Backend.GetValue(null).GetType().FullName+" main-thread="+Thread.CurrentThread.ManagedThreadId);
+      LanText.Refresh();pendingSwitch=false;
       foreach(var obj in FindObjects(Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow")))InputPatch(obj);
+      Log("BACKEND "+Backend.GetValue(null).GetType().FullName+" main-thread="+Thread.CurrentThread.ManagedThreadId);
      }
     }
-    string command=Path.Combine(Dir,"command.txt");
-    if(File.Exists(command)){string s;try{s=File.ReadAllText(command).Trim();File.Delete(command);}catch(IOException){return;}Command(s);}
+    Session.Pump(Command);
    }catch(Exception e){Log("PUMP ERROR "+e);}
   }
   static void Command(string cmd){
-   Log("COMMAND "+cmd);
    if(cmd=="steam-status"){
     var asm=AppDomain.CurrentDomain.GetAssemblies().Single(a=>a.GetName().Name=="Facepunch.Steamworks.Win64");
     foreach(string typeName in new[]{"Steamworks.SteamClient","Steamworks.SteamUser","Steamworks.SteamUtils"}){

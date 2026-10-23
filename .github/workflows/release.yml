@@ -34,7 +34,7 @@ jobs:
         run: |
           $zh = (Get-Content README.md -Raw -Encoding utf8) -split '\r?\n\r?\n', 2
           $en = (Get-Content README.en.md -Raw -Encoding utf8) -split '\r?\n\r?\n', 2
-          $notes = $zh[0] + "`n`n" + $en[0] + "`n`nExtract the complete ZIP into a writable folder, then open the package folder. Double-click frosthaven-lan.exe for direct game startup, or right-click and select Run as administrator for Steam startup. Steam-launched game processes require administrator permission for injection. Requires Windows x64 and supported Frosthaven through Steam. Verify the ZIP using the attached SHA256 file.`n`n请完整解压 ZIP 到可写目录，打开包目录，双击 frosthaven-lan.exe 直接启动游戏；右键选择以管理员身份运行则通过 Steam 启动。由于权限限制，Steam 启动的游戏需要管理员权限才能注入。需要 Windows x64 和支持版本的 Steam 游戏。"
+          $notes = $zh[0] + "`n`n" + $en[0] + "`n`nExtract the complete ZIP into a writable folder, then open the package folder. Double-click frosthaven-lan.exe for direct game startup, or right-click and select Run as administrator for Steam startup. Use administrator mode if you need the Steam in-game overlay. Requires Windows x64 and supported Frosthaven through Steam. Verify the ZIP using the attached SHA256 file.`n`n请完整解压 ZIP 到可写目录，打开包目录，双击 frosthaven-lan.exe 直接启动游戏；右键选择以管理员身份运行则通过 Steam 启动。如需开启 Steam 游戏内叠加界面，请以管理员模式启动工具。需要 Windows x64 和支持版本的 Steam 游戏。"
           Set-Content artifacts/release-notes.md -Value $notes -Encoding utf8
       - name: Publish GitHub Release
         env:
