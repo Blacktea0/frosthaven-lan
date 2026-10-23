@@ -66,7 +66,7 @@ unsafe fn inject(pid: u32) -> Result<()> {
         let error = std::io::Error::last_os_error();
         if error.raw_os_error() == Some(5) {
             return Err(
-                "Access to the game process was denied. Steam-launched games require administrator permission for injection. Right-click this tool and select Run as administrator, then retry."
+                "Access to the game process was denied. Steam-launched games require administrator permission for injection. Close the game manually, then reopen this tool using Run as administrator."
                     .into(),
             );
         }
@@ -86,7 +86,7 @@ unsafe fn inject(pid: u32) -> Result<()> {
         return Err("Mono not ready".into());
     }
     if remote.contains_key("lanbridge.dll") {
-        return Err("Already injected; restart game to load new build".into());
+        return Err("Already injected. Close the game manually, then reopen this tool.".into());
     }
     let load = GetProcAddress(
         GetModuleHandleA(b"kernel32.dll\0".as_ptr()),
@@ -155,16 +155,15 @@ fn main() {
         let args: Vec<String> = std::env::args().collect();
         let dir = root()?;
         match args.get(1).map(String::as_str) {
-            None => launcher::start(&dir, &[]),
-            Some("start") => launcher::start(&dir, &args[2..]),
-            Some("inject") => unsafe { inject(args.get(2).ok_or("Missing PID")?.parse()?) },
+            None => launcher::start(&dir),
+            Some("start") if args.len() == 2 => launcher::start(&dir),
             Some("command") => command(&dir, &args[2..].join(" ")),
             Some("verify") => {
                 println!("{}", verify()?);
                 Ok(())
             }
             Some("locate") => { println!("{}", discovery::locate()?.display()); Ok(()) }
-            _ => Err("Usage: frosthaven-lan [start [--pid PID] | inject PID | command <status|steam-status|restore> | locate | verify]".into()),
+            _ => Err("Usage: frosthaven-lan [start | command <status|steam-status|restore> | locate | verify]".into()),
         }
     })();
     let failed = result.is_err();
@@ -179,7 +178,11 @@ fn main() {
     if double_click {
         let mut pid = 0;
         if unsafe { GetConsoleProcessList(&mut pid, 1) } == 1 {
-            println!("Press Enter to close this window. The game will keep running.");
+            if failed {
+                println!("Press Enter to close this window.");
+            } else {
+                println!("Press Enter to close this window. The game will keep running.");
+            }
             input::wait_for_enter();
         }
     }

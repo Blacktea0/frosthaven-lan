@@ -190,27 +190,6 @@ pub fn process_path(pid: u32) -> std::io::Result<std::path::PathBuf> {
     }
 }
 
-pub fn loaded_module_path(pid: u32, name: &str) -> Option<std::path::PathBuf> {
-    unsafe {
-        let snapshot = CreateToolhelp32Snapshot(0x18, pid);
-        if snapshot as isize == -1 {
-            return None;
-        }
-        let mut entry: Module = std::mem::zeroed();
-        entry.size = std::mem::size_of::<Module>() as u32;
-        let mut ok = Module32FirstW(snapshot, &mut entry);
-        let mut found = None;
-        while ok != 0 {
-            if text(&entry.name).eq_ignore_ascii_case(name) {
-                found = Some(std::path::PathBuf::from(text(&entry.path)));
-                break;
-            }
-            ok = Module32NextW(snapshot, &mut entry);
-        }
-        CloseHandle(snapshot);
-        found
-    }
-}
 pub fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }

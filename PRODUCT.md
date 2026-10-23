@@ -36,11 +36,11 @@
 | 普通权限 | 直接启动登记安装中的 `Frosthaven.exe`，设置 `SteamAppId` | 双击启动器，或在普通终端运行 |
 | 管理员权限 | 立即通过 `steam://rungameid/2347080` 请求 Steam 启动游戏 | 右键“以管理员身份运行”，或使用管理员终端 |
 
-由于 Windows 权限限制，通过 Steam 启动的游戏进程需要管理员权限才能注入。游戏已经由 Steam 启动时，请使用管理员权限重新打开工具；普通权限无法访问较高权限的游戏进程。直接启动仍需游戏完成 Steam 身份初始化，不绕过登录或所有权检查。
+由于 Windows 权限限制，通过 Steam 启动的游戏进程需要管理员权限才能注入。如需通过 Steam 启动，请先关闭游戏，再以管理员身份运行工具，由工具发起启动；普通权限无法访问较高权限的游戏进程。直接启动仍需游戏完成 Steam 身份初始化，不绕过登录或所有权检查。
 
 Steam 启动请求后 3 分钟仍未检测到游戏会超时。两种模式都会自动开始启动，无需按 Enter；Enter 只用于注入结束后关闭独立控制台。启动器输出会说明两种使用方式、权限限制以及当前检测到的模式。
 
-已有游戏进程时复用；多个进程时用 `--pid` 选择。重复运行会查询已加载补丁的实际后端状态，不重复注入。更新补丁或恢复原后端后，需要重启游戏才能重新启用。多实例应使用各自独立的运行包目录，避免共用命令文件。
+工具启动时以及发起游戏启动前都会检查是否存在游戏进程；如果已经运行，提示用户手动关闭所有实例后重新打开工具，不注入、不结束游戏，也不接管已有进程。已移除 `--pid` 和直接注入子命令。普通模式只注入本次创建的子进程；Steam 模式只在本次启动请求后等待新游戏进程，多实例歧义时拒绝继续。更新补丁或恢复原后端后，需要手动关闭游戏，再重新打开工具才能启用。
 
 ## 运行包与构建
 
@@ -72,8 +72,7 @@ ZIP 内所有文件统一放在 `frosthaven-lan-v<版本>-windows-x64/` 文件�
 以下命令按当前进程权限运行；操作 Steam 启动的游戏时应使用管理员终端：
 
 ```text
-.\dist\frosthaven-lan.exe start --pid <PID>
-.\dist\frosthaven-lan.exe inject <PID>
+.\dist\frosthaven-lan.exe start
 cargo xtask locate
 cargo xtask verify
 cargo xtask command status
@@ -81,7 +80,7 @@ cargo xtask command steam-status
 cargo xtask command restore
 ```
 
-- `start` 等待运行时、注入并确认后端就绪；`inject` 仅执行注入步骤，不等待 LAN 就绪。
+- `start` 检查游戏已关闭，按当前权限启动游戏、等待运行时、注入并确认后端就绪。
 - `locate` 显示 Steam 中的安装目录；`verify` 校验游戏程序集。
 - `status` 查询当前后端与会话状态；`steam-status` 查询 Steam 身份状态。
 - `restore` 需先结束多人会话，然后恢复原网络后端、撤销方法补丁并刷新界面。DLL 和输入框实例配置在游戏退出后完全释放。
@@ -140,11 +139,11 @@ ENet 使用 **UDP 30000**。客户端以房主 IPv4 代替原邀请码输入；�
 
 The Rust launcher discovers Steam installations and verifies both the process path and the supported game assembly hash. It injects `LanBridge.dll`, waits for the Mono root domain, and invokes `Bootstrap.dll`. The bootstrap resolves packaged dependencies and loads the managed payload. The payload waits for `Assembly-CSharp` and `UnityEngine.CoreModule` before installing Harmony patches, then switches the backend and refreshes UI on the game thread. An active network session prevents switching.
 
-One `asInvoker` launcher preserves caller permissions and queries the effective process token for elevation. Standard permissions launch the game EXE directly with `SteamAppId`; administrator permissions request startup through Steam immediately. Neither path waits for Enter. Steam-launched game processes require administrator permission for injection due to Windows access restrictions. Right-click the launcher and select Run as administrator when using an existing Steam-launched game. Game-side Steam authentication still applies. A Steam startup request times out after three minutes. Existing processes are reused, `--pid` selects between instances, and repeated launches query the actual backend. Restart the game after payload updates or restore.
+One `asInvoker` launcher preserves caller permissions and queries the effective process token for elevation. Standard permissions launch the game EXE directly with `SteamAppId`; administrator permissions request startup through Steam immediately. Neither path waits for Enter. Steam-launched game processes require administrator permission for injection due to Windows access restrictions. Close the game first, then right-click the launcher and select Run as administrator to let the tool launch it through Steam. Game-side Steam authentication still applies. A Steam startup request times out after three minutes. Existing game processes are rejected: close all instances manually, then reopen the tool. PID selection and direct injection commands have been removed. Standard mode targets only its newly created child; Steam mode waits for a new process after its own startup request and rejects multiple instances. After updates or restore, close the game and reopen the tool.
 
 `cargo xtask package` builds the single release runtime. It archives the explicit runtime allowlist from `dist/`, both READMEs, `PRODUCT.md`, and the Harmony license. Starting with the next packaged release, all files are nested under a single `frosthaven-lan-v<version>-windows-x64/` directory. It verifies that top-level layout, extracted files, hashes, and the embedded `asInvoker` manifest, then writes the ZIP and SHA256 to `artifacts/`. Logs are excluded. Building uses runtime reflection and does not require installed game assemblies.
 
-Advanced commands include `start --pid <PID>`, `inject <PID>`, `locate`, `verify`, and `command <status|steam-status|restore>`. `start` confirms backend readiness; `inject` only loads the bridge. End multiplayer before restore. Native diagnostics are in `native.log`, dependency/entry failures in `bootstrap.log`, and patch/backend/command output in `payload.log`. No-argument launcher failures are saved in `launcher-error.log`. A loaded DLL alone does not confirm a ready LAN backend.
+Advanced commands include `start`, `locate`, `verify`, and `command <status|steam-status|restore>`. `start` requires the game to be closed, launches it, and confirms backend readiness. End multiplayer before restore. Native diagnostics are in `native.log`, dependency/entry failures in `bootstrap.log`, and patch/backend/command output in `payload.log`. No-argument launcher failures are saved in `launcher-error.log`. A loaded DLL alone does not confirm a ready LAN backend.
 
 ENet uses UDP 30000 and the client's invite-code field becomes a host-IPv4 field. Other computers must use the actual host IP rather than the host UI's `localhost`. Game text follows all 12 supported languages without modifying language files. Patches affect memory only; normal game configuration and save writes continue.
 

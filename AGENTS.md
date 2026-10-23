@@ -6,3 +6,4 @@
 - Target Windows x64 MSVC. Use one asInvoker launcher: standard permissions launch the game directly; administrator permissions launch through Steam. Preserve the complete five-file runtime package and permission guidance in both READMEs and startup output.
 - Do not commit game binaries, generated packages, logs, credentials, or local installation paths. Builds must not require installed game assemblies.
 - Validate with `cargo fmt --all -- --check`, `cargo test --workspace --locked`, `cargo xtask test-managed`, and `cargo xtask package` as appropriate. Do not start or inject into the game during automated build verification.
+- Only inject into games launched by this tool after confirming no game is running. Reject existing instances with manual-close/reopen guidance; do not add PID selection or direct injection CLI commands.

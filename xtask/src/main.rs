@@ -140,11 +140,12 @@ fn main() {
             Some("build") if args.len() == 1 => build(&root),
             Some("test-managed") if args.len() == 1 => test_managed(&root),
             Some("package") if args.len() == 1 => package(&root),
-            Some("run") => {
-                if win::game_pids()?.is_empty() {
-                    build(&root)?;
+            Some("run") if args.len() == 1 => {
+                if !win::game_pids()?.is_empty() {
+                    return Err("Frosthaven is already running. Close all game instances manually, then reopen this tool.".into());
                 }
-                tool(&root, "start", &args[1..])
+                build(&root)?;
+                tool(&root, "start", &[])
             }
             Some("verify") if args.len() == 1 => tool(&root, "verify", &[]),
             Some("locate") if args.len() == 1 => {
@@ -153,7 +154,7 @@ fn main() {
             }
             Some("command") if args.len() > 1 => tool(&root, "command", &args[1..]),
             None | Some("help" | "--help" | "-h") => {
-                println!("cargo xtask build\ncargo xtask test-managed\ncargo xtask package\ncargo xtask run [--pid PID]\ncargo xtask locate\ncargo xtask verify\ncargo xtask command <status|steam-status|restore>");
+                println!("cargo xtask build\ncargo xtask test-managed\ncargo xtask package\ncargo xtask run\ncargo xtask locate\ncargo xtask verify\ncargo xtask command <status|steam-status|restore>");
                 Ok(())
             }
             _ => Err("Unknown task or invalid arguments; use cargo xtask help".into()),

@@ -1,7 +1,7 @@
 use super::config::APP_ID;
 use super::{
-    command, discovery, inject, log, modules, verify_game,
-    win::{game_pids, is_elevated, loaded_module_path, open_steam_game},
+    discovery, inject, log, modules, verify_game,
+    win::{game_pids, is_elevated, open_steam_game},
     Result,
 };
 use std::{
@@ -10,18 +10,18 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Default, Debug, PartialEq)]
-struct Options {
-    pid: Option<u32>,
+const GAME_ALREADY_RUNNING: &str = "Frosthaven is already running. Close all game instances manually, then reopen this tool. Existing game processes will not be injected.";
+
+fn require_closed_game(pids: &[u32]) -> Result<()> {
+    if !pids.is_empty() {
+        return Err(GAME_ALREADY_RUNNING.into());
+    }
+    Ok(())
 }
 
 fn wait_for_game(elevated: bool) -> Result<u32> {
-    // Recheck immediately before dispatching to avoid an unnecessary second launch.
-    match game_pids()?.as_slice() {
-        [pid] => return Ok(*pid),
-        [] => {}
-        _ => return Err("Multiple game instances: specify --pid PID".into()),
-    }
+    // Recheck just before launching in case a game appeared after the initial check.
+    require_closed_game(&game_pids()?)?;
     if !elevated {
         return launch_direct();
     }
@@ -32,7 +32,7 @@ fn wait_for_game(elevated: bool) -> Result<u32> {
         match game_pids()?.as_slice() {
             [pid] => return Ok(*pid),
             [] => {}
-            _ => return Err("Multiple game instances: specify --pid PID".into()),
+            _ => return Err("Multiple game instances detected. Close all game instances manually, then reopen this tool.".into()),
         }
         if Instant::now() >= deadline {
             return Err("Steam startup timed out. Check Steam and reopen this tool.".into());
@@ -44,6 +44,7 @@ fn wait_for_game(elevated: bool) -> Result<u32> {
 fn launch_direct() -> Result<u32> {
     let game = discovery::locate()?;
     verify_game(&game)?;
+    require_closed_game(&game_pids()?)?;
     println!("Launching Frosthaven directly with standard permissions...");
     let mut child = std::process::Command::new(game.join("Frosthaven.exe"))
         .current_dir(&game)
@@ -66,41 +67,21 @@ fn launch_direct() -> Result<u32> {
     }
 }
 
-fn options(args: &[String]) -> Result<Options> {
-    let mut result = Options::default();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--pid" if result.pid.is_none() => {
-                let pid = args
-                    .next()
-                    .ok_or("--pid needs a process ID")?
-                    .parse::<u32>()?;
-                if pid == 0 {
-                    return Err("PID must be positive".into());
-                }
-                result.pid = Some(pid);
-            }
-            _ => return Err(format!("Unknown or repeated start argument: {arg}").into()),
-        }
-    }
-    Ok(result)
-}
-
-pub fn start(dir: &Path, args: &[String]) -> Result<()> {
-    let options = options(args)?;
+pub fn start(dir: &Path) -> Result<()> {
+    require_closed_game(&game_pids()?)?;
     let elevated = is_elevated()?;
     println!("Startup modes: double-click to launch the game directly with standard permissions.");
     println!("To launch through Steam, right-click this tool and select Run as administrator.");
     println!("Steam-launched game processes require administrator permission for injection due to Windows access restrictions.");
     println!(
-        "Current mode: {}. An existing game process will be reused.",
+        "Current mode: {}. This tool must launch the game.",
         if elevated {
             "administrator (Steam startup)"
         } else {
             "standard (direct startup)"
         }
     );
+    println!("If Frosthaven is already running, close it manually and reopen this tool. Existing processes will not be injected.");
     for file in [
         "LanBridge.dll",
         "Bootstrap.dll",
@@ -111,37 +92,10 @@ pub fn start(dir: &Path, args: &[String]) -> Result<()> {
             return Err(format!("Missing {file}; run cargo xtask build").into());
         }
     }
-    let pids = game_pids()?;
-    let pid = match options.pid {
-        Some(pid) if pids.contains(&pid) => pid,
-        Some(_) => return Err("--pid must identify a running Frosthaven process".into()),
-        None if pids.len() > 1 => return Err("Multiple game instances: specify --pid PID".into()),
-        None => match pids.first() {
-            Some(pid) => *pid,
-            None => wait_for_game(elevated)?,
-        },
-    };
+    let pid = wait_for_game(elevated)?;
     let game = discovery::for_process(pid)?;
     verify_game(&game)?;
     println!("Game directory: {}", game.display());
-    if let Some(bridge) = loaded_module_path(pid, "LanBridge.dll") {
-        let runtime = bridge.parent().ok_or("Invalid loaded bridge path")?;
-        let offset = log(runtime).len();
-        command(runtime, "status")?;
-        let deadline = Instant::now() + Duration::from_secs(20);
-        loop {
-            let data = log(runtime);
-            let fresh = data.get(offset..).unwrap_or("");
-            if fresh.contains("STATUS backend=FFSNet.Backend.EnetNetworkBackend") {
-                println!("The LAN patch is already enabled.");
-                return Ok(());
-            }
-            if fresh.contains("STATUS backend=") || Instant::now() >= deadline {
-                return Err("The patch is loaded but the LAN backend is not ready. Restart the game and run this tool again.".into());
-            }
-            thread::sleep(Duration::from_millis(250));
-        }
-    }
     let offset = log(dir).len();
     let bootstrap_offset = std::fs::read_to_string(dir.join("bootstrap.log"))
         .unwrap_or_default()
@@ -162,7 +116,7 @@ pub fn start(dir: &Path, args: &[String]) -> Result<()> {
                     .downcast_ref::<std::io::Error>()
                     .is_some_and(|e| e.raw_os_error() == Some(5))
                 {
-                    return Err("Access to the game process was denied. Steam-launched games require administrator permission for injection. Close this tool, right-click it, and select Run as administrator.".into());
+                    return Err("Access to the game process was denied. Steam-launched games require administrator permission for injection. Close the game manually, then reopen this tool using Run as administrator.".into());
                 }
                 // Toolhelp can temporarily report ERROR_BAD_LENGTH while the
                 // game is loading modules; retry only that transient failure.
@@ -222,4 +176,18 @@ pub fn start(dir: &Path, args: &[String]) -> Result<()> {
         dir.join("payload.log").display()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn existing_games_require_manual_shutdown() {
+        for pids in [vec![123], vec![123, 456]] {
+            let message = require_closed_game(&pids).unwrap_err().to_string();
+            assert!(message.contains("Close all game instances manually"));
+            assert!(message.contains("reopen this tool"));
+        }
+        assert!(require_closed_game(&[]).is_ok());
+    }
 }

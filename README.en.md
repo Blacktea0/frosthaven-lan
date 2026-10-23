@@ -15,11 +15,11 @@ See [PRODUCT.md](PRODUCT.md) for design details, advanced commands, and troubles
 
 1. Install and sign in to Steam, and confirm the game launches normally. Both players need the same game and patch version.
 2. Download the ZIP from [Releases](https://github.com/Blacktea0/frosthaven-lan/releases/latest) and **extract all files** into a writable folder. Do not copy only the EXE.
-3. Choose a startup mode: **double-click** `frosthaven-lan.exe` normally to launch the game EXE directly, or **right-click → Run as administrator** to launch the game through Steam immediately. An existing game process is reused.
+3. Choose a startup mode: **double-click** `frosthaven-lan.exe` normally to launch the game EXE directly, or **right-click → Run as administrator** to launch the game through Steam immediately. **The game must be started by this tool.** If it is already running, close all game instances manually, then reopen the tool.
 4. Wait for `LAN backend ready`. The host loads a campaign and opens multiplayer from the pause menu.
 5. The client selects Multiplayer → Join Game and enters the host IPv4 address (for example `192.168.1.20`, without a port). The host assigns characters and confirms.
 
-**Due to Windows access restrictions, Steam-launched game processes require administrator permission for injection.** If the game is already running through Steam, close the tool and reopen it using Run as administrator. Standard permissions are intended for direct game startup by this tool.
+**Due to Windows access restrictions, Steam-launched game processes require administrator permission for injection.** To use Steam startup, close the game first, then open this tool using Run as administrator so it can launch the game. Standard permissions are intended for direct game startup by this tool.
 
 Allow **UDP 30000** across the network. Other computers must use the host's actual IP rather than the `localhost` shown in the host UI. Steam identity initialization is still required; fully offline startup is unsupported.
 
@@ -43,7 +43,6 @@ Run from the repository root. Close the game before rebuilding.
 cargo xtask build           # Build the production runtime in dist/
 cargo xtask package         # Write production ZIP and SHA256 to artifacts/
 cargo xtask run             # Build and run using the terminal's permission level
-cargo xtask run --pid <PID> # Use an existing game process
 ```
 
 There is one runtime: standard terminals launch the game directly; administrator terminals launch it through Steam. Use `xtask` for the complete runtime; `cargo build` alone builds only Rust components.
