@@ -13,13 +13,11 @@ namespace FrosthavenLan {
    if(assembly==null)throw new InvalidOperationException("Required runtime assembly is not loaded: "+name);
    return assembly;
   }
-  internal static void WaitFor(string[] names,int timeoutMilliseconds,Action<string> log) {
+  internal static void WaitFor(string[] names,int timeoutMilliseconds) {
    var timer=Stopwatch.StartNew();
-   string previous=null;
    while(true) {
     string missing=String.Join(", ",names.Where(name=>Find(name)==null).ToArray());
     if(missing.Length==0)return;
-    if(missing!=previous){log("WAITING for runtime assemblies: "+missing);previous=missing;}
     if(timer.ElapsedMilliseconds>=timeoutMilliseconds)throw new TimeoutException("Runtime assembly initialization timed out: "+missing);
     Thread.Sleep(50);
    }

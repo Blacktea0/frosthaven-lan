@@ -140,7 +140,7 @@ LAN 后端启用后，在主菜单 `VersionAndChangeLog.VersionText` 的原有�
 | `src/` | Rust CLI、启动器、Steam 发现、Mono 桥接与 Windows API |
 | `managed/` | C# 进程内补丁、运行时程序集等待与多语言文案 |
 | `xtask/` | 编译、运行、托管测试与打包入口 |
-| `tools/` | ZIP 打包、测试与只读分析工具 |
+| `tools/` | ZIP 打包与回归测试工具 |
 | `.cargo/config.toml` | Cargo 命令别名与链接配置 |
 | `.github/workflows/release.yml` | tag 自动发布流程 |
 | `docs/reverse-engineering/` | 逆向分析流程与原始证据 |

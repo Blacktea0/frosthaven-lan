@@ -3,7 +3,6 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Threading;
 using HarmonyLib;
 namespace FrosthavenLan {
  public static class Payload {
@@ -20,7 +19,6 @@ namespace FrosthavenLan {
   static bool Running(object backend) { return (bool)BackendProperty("IsRunning").GetValue(backend,null); }
   static object NewBackend(Type type,object old) {
    var ctor=type.GetConstructors().Single(c=>{var p=c.GetParameters();return p.Length==2 && p[0].ParameterType.IsInstanceOfType(Prop("Manager")) && p[1].ParameterType.IsInstanceOfType(Prop("CurrentUserToken"));});
-   if(ctor==null)throw new MissingMethodException(type.FullName,".ctor(NetworkManager, UserToken)");
    var backend=ctor.Invoke(new[]{Prop("Manager"),Prop("CurrentUserToken")});
    var handler=BackendProperty("ConnectRequestedHandler");handler.SetValue(backend,handler.GetValue(old,null),null);return backend;
   }
@@ -28,11 +26,10 @@ namespace FrosthavenLan {
   const BindingFlags All=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Static|BindingFlags.Instance;
   static object Prop(string n) { return Net.GetProperty(n,All).GetValue(null,null); }
   static FieldInfo Backend { get { return Net.GetField("_backend",All); } }
-  public static void Log(string s){Session.Report(s);}
   public static void Install() {
    if(harmony!=null) return;
    try {
-    RuntimeAssemblies.WaitFor(new[]{"Assembly-CSharp","UnityEngine.CoreModule"},120000,Log);
+    RuntimeAssemblies.WaitFor(new[]{"Assembly-CSharp","UnityEngine.CoreModule"},120000);
     harmony=new Harmony("local.frosthaven.lan.prototype");
     Type sync=Unity("UnityEngine.Object").Assembly.GetType("UnityEngine.UnitySynchronizationContext",true);
     harmony.Patch(AccessTools.Method(sync,"Exec"),postfix:new HarmonyMethod(typeof(Payload),"Pump"));
@@ -40,8 +37,8 @@ namespace FrosthavenLan {
     harmony.Patch(AccessTools.Method(init,"MoveNext"),transpiler:new HarmonyMethod(typeof(Payload),"SwapConstructor"));
     var ui=Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow",true);
     harmony.Patch(AccessTools.Method(ui,"AwakeInit"),postfix:new HarmonyMethod(typeof(Payload),"InputPatch"));
-    LanUi.Install(harmony);LanText.Install(harmony);Log("INSTALLED patches; awaiting main thread");
-   } catch(Exception e){Log("INSTALL ERROR "+e);if(harmony!=null){harmony.UnpatchAll(harmony.Id);harmony=null;}}
+    LanUi.Install(harmony);LanText.Install(harmony);
+   } catch(Exception e){Session.Report("INSTALL ERROR "+e);if(harmony!=null){harmony.UnpatchAll(harmony.Id);harmony=null;}}
   }
   public static IEnumerable<CodeInstruction> SwapConstructor(IEnumerable<CodeInstruction> code) {
    int count=0;
@@ -54,7 +51,7 @@ namespace FrosthavenLan {
   public static void InputPatch(object __instance){
    var f=AccessTools.Field(__instance.GetType(),"inviteCodeInput");
    var input=f==null?null:f.GetValue(__instance);
-   if(input!=null){SetInput(input,"contentType","Standard");SetInput(input,"characterValidation","None");input.GetType().GetProperty("characterLimit").SetValue(input,253,null);Log("IP input enabled");}
+   if(input!=null){SetInput(input,"contentType","Standard");SetInput(input,"characterValidation","None");input.GetType().GetProperty("characterLimit").SetValue(input,253,null);}
   }
   static void SetInput(object input,string name,string value){var prop=input.GetType().GetProperty(name);prop.SetValue(input,Enum.Parse(prop.PropertyType,value),null);}
   public static void Pump(){
@@ -62,7 +59,7 @@ namespace FrosthavenLan {
    try {
     if(pendingSwitch && Backend.GetValue(null)!=null && Prop("CurrentUserToken")!=null){
      var old=Backend.GetValue(null);
-     if(Running(old)){Log("REFUSED: active network session; pending switch cancelled");pendingSwitch=false;}
+     if(Running(old)){Session.Report("REFUSED: active network session; pending switch cancelled");pendingSwitch=false;}
      else {
       if(!Enet.IsInstanceOfType(old)){
        var lan=NewBackend(Enet,old);
@@ -70,21 +67,21 @@ namespace FrosthavenLan {
       }
       LanUi.SetEnabled(true);LanText.Refresh();pendingSwitch=false;
       foreach(var obj in FindObjects(Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow")))InputPatch(obj);
-      Log("BACKEND "+Backend.GetValue(null).GetType().FullName+" main-thread="+Thread.CurrentThread.ManagedThreadId);
+      Session.Report("BACKEND FFSNet.Backend.EnetNetworkBackend");
      }
     }
     Session.Pump(Command);
-   }catch(Exception e){Log("PUMP ERROR "+e);}
+   }catch(Exception e){Session.Report("PUMP ERROR "+e);}
   }
   static void Command(string cmd){
    if(cmd=="steam-status"){
     var asm=AppDomain.CurrentDomain.GetAssemblies().Single(a=>a.GetName().Name=="Facepunch.Steamworks.Win64");
     foreach(string typeName in new[]{"Steamworks.SteamClient","Steamworks.SteamUser","Steamworks.SteamUtils"}){
      var type=asm.GetType(typeName);if(type==null)continue;
-     foreach(string name in new[]{"IsValid","IsLoggedOn","IsOverlayEnabled"}){var prop=type.GetProperty(name,BindingFlags.Public|BindingFlags.Static);if(prop!=null)Log("STEAM_STATUS "+typeName+"."+name+"="+prop.GetValue(null,null));}
-    }Log("STEAM_STATUS_DONE");return;
+     foreach(string name in new[]{"IsValid","IsLoggedOn","IsOverlayEnabled"}){var prop=type.GetProperty(name,BindingFlags.Public|BindingFlags.Static);if(prop!=null)Session.Report("STEAM_STATUS "+typeName+"."+name+"="+prop.GetValue(null,null));}
+    }Session.Report("STEAM_STATUS_DONE");return;
    }
-   if(cmd=="status"){Log("STATUS backend="+Backend.GetValue(null)+" running="+Prop("IsRunning"));return;}
+   if(cmd=="status"){Session.Report("STATUS backend="+Backend.GetValue(null)+" running="+Prop("IsRunning"));return;}
    if(cmd=="restore"){
     var current=Backend.GetValue(null);
     if(Running(current))throw new Exception("Cannot restore during active game session");
@@ -94,7 +91,7 @@ namespace FrosthavenLan {
      originalBackend=eos;
     }
     if(originalBackend!=null){((IDisposable)current).Dispose();Backend.SetValue(null,originalBackend);}
-    LanUi.SetEnabled(false);harmony.UnpatchAll(harmony.Id);LanText.Refresh();Log("RESTORED; input settings revert on process exit");return;
+    LanUi.SetEnabled(false);harmony.UnpatchAll(harmony.Id);LanText.Refresh();Session.Report("RESTORED; input settings revert on process exit");return;
    }
    throw new Exception("Unknown command");
   }

@@ -1,6 +1,5 @@
 mod config;
 mod discovery;
-mod input;
 mod ipc;
 mod launcher;
 mod ui;
@@ -225,7 +224,7 @@ fn main() {
                 "{}",
                 ui::text("按 Enter 关闭窗口。", "Press Enter to close this window.")
             );
-            input::wait_for_enter();
+            let _ = std::io::stdin().read_line(&mut String::new());
         }
     }
     if failed {
