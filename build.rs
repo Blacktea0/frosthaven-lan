@@ -1,14 +1,5 @@
 fn main() {
-    let dev = std::env::var_os("CARGO_FEATURE_DEV_LAUNCHER").is_some();
-    // Keep ordinary test harnesses runnable without UAC.
-    if !dev && std::env::var("PROFILE").as_deref() != Ok("release") {
-        return;
-    }
-    let manifest_name = if dev {
-        "app.dev.manifest"
-    } else {
-        "app.manifest"
-    };
+    let manifest_name = "app.manifest";
     println!("cargo:rerun-if-changed={manifest_name}");
     match std::env::var("CARGO_CFG_TARGET_ENV").as_deref() {
         Ok("msvc") => {
@@ -43,7 +34,7 @@ fn main() {
                 .arg(&object)
                 .status()
                 .expect("GNU builds require windres on PATH");
-            assert!(status.success(), "Failed to compile administrator manifest");
+            assert!(status.success(), "Failed to compile application manifest");
             println!(
                 "cargo:rustc-link-arg-bin=frosthaven-lan={}",
                 object.display()

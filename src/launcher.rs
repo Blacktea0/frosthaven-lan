@@ -1,10 +1,9 @@
+use super::config::APP_ID;
 use super::{
     command, discovery, inject, log, modules, verify_game,
-    win::{game_pids, loaded_module_path},
+    win::{game_pids, is_elevated, loaded_module_path, open_steam_game},
     Result,
 };
-#[cfg(not(feature = "dev-launcher"))]
-use super::{config::APP_ID, input, win::open_steam_game};
 use std::{
     path::Path,
     thread,
@@ -16,48 +15,39 @@ struct Options {
     pid: Option<u32>,
 }
 
-#[cfg(not(feature = "dev-launcher"))]
-fn wait_for_game() -> Result<u32> {
-    println!("Frosthaven is not running. Start the game through Steam.");
-    println!("Or press Enter in this window to request startup through Steam.");
-    println!("Waiting for the game; injection starts automatically when detected. Close this window to cancel.");
-    let mut requested = None;
+fn wait_for_game(elevated: bool) -> Result<u32> {
+    // Recheck immediately before dispatching to avoid an unnecessary second launch.
+    match game_pids()?.as_slice() {
+        [pid] => return Ok(*pid),
+        [] => {}
+        _ => return Err("Multiple game instances: specify --pid PID".into()),
+    }
+    if !elevated {
+        return launch_direct();
+    }
+    open_steam_game(APP_ID)?;
+    println!("Startup requested through Steam. Waiting for the game process...");
+    let deadline = Instant::now() + Duration::from_secs(180);
     loop {
-        let pids = game_pids()?;
-        match pids.as_slice() {
+        match game_pids()?.as_slice() {
             [pid] => return Ok(*pid),
             [] => {}
-            _ => {
-                return Err(
-                    "Multiple game instances detected. Select the target with --pid PID.".into(),
-                )
-            }
+            _ => return Err("Multiple game instances: specify --pid PID".into()),
         }
-        if requested.is_none() && input::enter_pressed() {
-            // Recheck immediately before dispatching: manual startup may have
-            // created the game process while the user was pressing Enter.
-            if !game_pids()?.is_empty() {
-                continue;
-            }
-            open_steam_game(APP_ID)?;
-            println!("Startup requested through Steam. Waiting for the game process...");
-            requested = Some(Instant::now());
-        }
-        if requested.is_some_and(|at| at.elapsed() >= Duration::from_secs(180)) {
+        if Instant::now() >= deadline {
             return Err("Steam startup timed out. Check Steam and reopen this tool.".into());
         }
         thread::sleep(Duration::from_millis(250));
     }
 }
 
-#[cfg(feature = "dev-launcher")]
-fn wait_for_game() -> Result<u32> {
+fn launch_direct() -> Result<u32> {
     let game = discovery::locate()?;
     verify_game(&game)?;
-    println!("DEV: launching Frosthaven directly without Steam startup or elevation.");
+    println!("Launching Frosthaven directly with standard permissions...");
     let mut child = std::process::Command::new(game.join("Frosthaven.exe"))
         .current_dir(&game)
-        .env("SteamAppId", super::config::APP_ID)
+        .env("SteamAppId", APP_ID)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()?;
@@ -99,6 +89,18 @@ fn options(args: &[String]) -> Result<Options> {
 
 pub fn start(dir: &Path, args: &[String]) -> Result<()> {
     let options = options(args)?;
+    let elevated = is_elevated()?;
+    println!("Startup modes: double-click to launch the game directly with standard permissions.");
+    println!("To launch through Steam, right-click this tool and select Run as administrator.");
+    println!("Steam-launched game processes require administrator permission for injection due to Windows access restrictions.");
+    println!(
+        "Current mode: {}. An existing game process will be reused.",
+        if elevated {
+            "administrator (Steam startup)"
+        } else {
+            "standard (direct startup)"
+        }
+    );
     for file in [
         "LanBridge.dll",
         "Bootstrap.dll",
@@ -116,7 +118,7 @@ pub fn start(dir: &Path, args: &[String]) -> Result<()> {
         None if pids.len() > 1 => return Err("Multiple game instances: specify --pid PID".into()),
         None => match pids.first() {
             Some(pid) => *pid,
-            None => wait_for_game()?,
+            None => wait_for_game(elevated)?,
         },
     };
     let game = discovery::for_process(pid)?;
@@ -160,7 +162,7 @@ pub fn start(dir: &Path, args: &[String]) -> Result<()> {
                     .downcast_ref::<std::io::Error>()
                     .is_some_and(|e| e.raw_os_error() == Some(5))
                 {
-                    return Err("Access to the game process was denied. Run this tool as administrator and use the game started by Steam.".into());
+                    return Err("Access to the game process was denied. Steam-launched games require administrator permission for injection. Close this tool, right-click it, and select Run as administrator.".into());
                 }
                 // Toolhelp can temporarily report ERROR_BAD_LENGTH while the
                 // game is loading modules; retry only that transient failure.

@@ -73,6 +73,14 @@ extern "system" {
 }
 #[link(name = "advapi32")]
 extern "system" {
+    fn OpenProcessToken(process: Handle, access: u32, token: *mut Handle) -> i32;
+    fn GetTokenInformation(
+        token: Handle,
+        class: u32,
+        info: *mut c_void,
+        size: u32,
+        returned: *mut u32,
+    ) -> i32;
     fn RegGetValueW(
         key: Handle,
         subkey: *const u16,
@@ -93,6 +101,33 @@ extern "system" {
         directory: *const u16,
         show: i32,
     ) -> Handle;
+}
+
+/// Read the effective process token, including UAC's filtered administrator tokens.
+pub fn is_elevated() -> std::io::Result<bool> {
+    unsafe {
+        let mut token = std::ptr::null_mut();
+        // GetCurrentProcess's documented pseudo-handle; TOKEN_QUERY = 0x0008.
+        if OpenProcessToken(-1isize as Handle, 0x0008, &mut token) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut elevated = 0u32;
+        let mut returned = 0u32;
+        // TokenElevation = 20; TOKEN_ELEVATION contains one DWORD.
+        let ok = GetTokenInformation(
+            token,
+            20,
+            (&mut elevated as *mut u32).cast(),
+            4,
+            &mut returned,
+        );
+        let error = std::io::Error::last_os_error();
+        CloseHandle(token);
+        if ok == 0 {
+            return Err(error);
+        }
+        Ok(elevated != 0)
+    }
 }
 
 pub fn open_steam_game(app_id: &str) -> Result<(), String> {
@@ -205,5 +240,14 @@ pub fn pids_named(name: &str) -> std::io::Result<Vec<u32>> {
         }
         CloseHandle(snapshot);
         Ok(pids)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn current_process_token_can_be_queried() {
+        super::is_elevated()
+            .expect("The current process token must support TokenElevation queries");
     }
 }

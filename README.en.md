@@ -15,9 +15,11 @@ See [PRODUCT.md](PRODUCT.md) for design details, advanced commands, and troubles
 
 1. Install and sign in to Steam, and confirm the game launches normally. Both players need the same game and patch version.
 2. Download the ZIP from [Releases](https://github.com/Blacktea0/frosthaven-lan/releases/latest) and **extract all files** into a writable folder. Do not copy only the EXE.
-3. Double-click `frosthaven-lan.exe` and approve administrator access. Start the game through Steam yourself, or press Enter in the tool to request Steam startup. An existing game process is reused.
+3. Choose a startup mode: **double-click** `frosthaven-lan.exe` normally to launch the game EXE directly, or **right-click → Run as administrator** to launch the game through Steam immediately. An existing game process is reused.
 4. Wait for `LAN backend ready`. The host loads a campaign and opens multiplayer from the pause menu.
 5. The client selects Multiplayer → Join Game and enters the host IPv4 address (for example `192.168.1.20`, without a port). The host assigns characters and confirms.
+
+**Due to Windows access restrictions, Steam-launched game processes require administrator permission for injection.** If the game is already running through Steam, close the tool and reopen it using Run as administrator. Standard permissions are intended for direct game startup by this tool.
 
 Allow **UDP 30000** across the network. Other computers must use the host's actual IP rather than the `localhost` shown in the host UI. Steam identity initialization is still required; fully offline startup is unsupported.
 
@@ -38,25 +40,17 @@ Harmony 2.3.3 is included. Building does not require the game; live injection te
 Run from the repository root. Close the game before rebuilding.
 
 ```text
-cargo xtask build-dev       # Build the dev runtime in dist-dev/
-cargo xtask dev             # Build and run the dev launcher
-cargo xtask dev --pid <PID> # Use an existing game process
-```
-
-The dev build does not request administrator access. If no game is running, it launches the game EXE directly without a Steam launch request. Game-side Steam identity initialization still applies.
-
-```text
 cargo xtask build           # Build the production runtime in dist/
 cargo xtask package         # Write production ZIP and SHA256 to artifacts/
-cargo xtask run             # Run production from an administrator terminal
+cargo xtask run             # Build and run using the terminal's permission level
+cargo xtask run --pid <PID> # Use an existing game process
 ```
 
-Production always requires administrator access. Packaging uses only the production build. Use `xtask` for the complete runtime; `cargo build` alone builds only Rust components.
+There is one runtime: standard terminals launch the game directly; administrator terminals launch it through Steam. Use `xtask` for the complete runtime; `cargo build` alone builds only Rust components.
 
 ```text
 cargo fmt --all -- --check
 cargo test --workspace --locked
-cargo test --workspace --locked --features dev-launcher
 cargo xtask test-managed
 ```
 

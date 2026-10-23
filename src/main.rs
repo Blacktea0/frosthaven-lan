@@ -66,7 +66,7 @@ unsafe fn inject(pid: u32) -> Result<()> {
         let error = std::io::Error::last_os_error();
         if error.raw_os_error() == Some(5) {
             return Err(
-                "Access to the game process was denied. Run this tool as administrator and retry."
+                "Access to the game process was denied. Steam-launched games require administrator permission for injection. Right-click this tool and select Run as administrator, then retry."
                     .into(),
             );
         }

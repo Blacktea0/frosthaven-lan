@@ -71,8 +71,8 @@ try {
     }
     [xml]$manifest = [ExecutableManifest]::Read((Join-Path $runtime 'frosthaven-lan.exe'))
     $level = $manifest.SelectSingleNode("//*[local-name()='requestedExecutionLevel']")
-    if ($null -eq $level -or $level.level -ne 'requireAdministrator' -or $level.uiAccess -ne 'false') {
-        throw 'The launcher must require administrator permission'
+    if ($null -eq $level -or $level.level -ne 'asInvoker' -or $level.uiAccess -ne 'false') {
+        throw 'The launcher must preserve caller permissions with an asInvoker manifest'
     }
     $hash = (Get-Sha256 $zip)
     [IO.File]::WriteAllText("$zip.sha256", "$hash  $([IO.Path]::GetFileName($zip))`n", (New-Object Text.UTF8Encoding($false)))

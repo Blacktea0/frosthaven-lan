@@ -15,9 +15,11 @@ Windows x64 的 Frosthaven 局域网联机工具，通过内存注入启用游�
 
 1. 安装并登录 Steam，确认游戏可以正常启动。双方使用相同的游戏版本和补丁。
 2. 从 [Releases](https://github.com/Blacktea0/frosthaven-lan/releases/latest) 下载 ZIP，**完整解压**到可写目录，不要只复制 EXE。
-3. 双击 `frosthaven-lan.exe`，允许管理员授权。自行从 Steam 启动游戏，或在工具窗口按 Enter 请求 Steam 启动；游戏已运行时会自动复用。
+3. 选择启动方式：**普通双击** `frosthaven-lan.exe`，工具会直接启动游戏本体；**右键 → 以管理员身份运行**，工具会立即通过 Steam 启动游戏。已有游戏进程时会自动复用。
 4. 等待出现 `LAN backend ready`。房主载入战役，从暂停菜单进入“多人游戏”开房。
 5. 客户端选择“多人游戏 → 加入游戏”，输入房主 IPv4（例如 `192.168.1.20`，不带端口）；房主分配角色并确认。
+
+**由于 Windows 权限限制，通过 Steam 启动的游戏进程需要管理员权限才能注入。** 如果游戏已由 Steam 启动，请关闭工具，再右键选择“以管理员身份运行”。普通权限适用于由工具直接启动游戏的方式。
 
 网络需允许 **UDP 30000**。房主界面显示的 `localhost` 不能用于其他电脑连接，请使用房主实际 IP。仍需 Steam 身份初始化，不支持完全离线启动。
 
@@ -38,25 +40,17 @@ Harmony 2.3.3 已包含在仓库中。编译无需安装游戏；实际注入测
 在项目根目录执行，重建前先退出游戏。
 
 ```text
-cargo xtask build-dev       # 构建开发版到 dist-dev/
-cargo xtask dev             # 构建并运行开发版
-cargo xtask dev --pid <PID> # 使用已有游戏进程
-```
-
-开发版不请求管理员权限，无游戏进程时直接启动游戏 EXE，无需通过 Steam 发起启动。游戏自身仍会进行 Steam 身份初始化。
-
-```text
 cargo xtask build           # 构建正式版到 dist/
 cargo xtask package         # 生成正式版 ZIP 和 SHA256 到 artifacts/
-cargo xtask run             # 运行正式版（使用管理员终端）
+cargo xtask run             # 构建并运行，按当前终端权限选择启动方式
+cargo xtask run --pid <PID> # 使用已有游戏进程
 ```
 
-正式版始终要求管理员权限，打包只使用正式版。请使用 `xtask` 生成完整运行包，`cargo build` 仅构建 Rust 部分。
+只有一个运行版本：普通终端直接启动游戏，管理员终端通过 Steam 启动。请使用 `xtask` 生成完整运行包，`cargo build` 仅构建 Rust 部分。
 
 ```text
 cargo fmt --all -- --check
 cargo test --workspace --locked
-cargo test --workspace --locked --features dev-launcher
 cargo xtask test-managed
 ```
 

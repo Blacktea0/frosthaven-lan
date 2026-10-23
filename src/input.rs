@@ -1,4 +1,4 @@
-//! Share one stdin reader between the startup prompt and the final console pause.
+//! Read Enter for the final console pause.
 use std::sync::{
     mpsc::{sync_channel, Receiver},
     Mutex, OnceLock,
@@ -21,11 +21,6 @@ fn events() -> &'static Mutex<Receiver<bool>> {
         });
         Mutex::new(receiver)
     })
-}
-
-#[cfg(not(feature = "dev-launcher"))]
-pub fn enter_pressed() -> bool {
-    matches!(events().lock().unwrap().try_recv(), Ok(true))
 }
 
 pub fn wait_for_enter() {
