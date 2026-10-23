@@ -63,7 +63,7 @@ artifacts/frosthaven-lan-v<版本>-windows-x64.zip
 artifacts/frosthaven-lan-v<版本>-windows-x64.zip.sha256
 ```
 
-ZIP 内所有文件统一放在 `frosthaven-lan-v<版本>-windows-x64/` 文件夹中，顶层不散放文件。此结构从下一次打包发布开始使用。
+ZIP 内所有文件统一放在 `frosthaven-lan/` 文件夹中，顶层不散放文件。ZIP 文件名保留版本号，此结构从下一次打包发布开始使用。
 
 打包会解压确认顶层仅有该文件夹，再核对其中的文件列表与内容哈希，并从 EXE 资源中读取清单，确认 `asInvoker` 和 `uiAccess=false`。最终用户无需安装 Rust。
 
@@ -156,7 +156,7 @@ The Rust launcher discovers Steam installations and verifies both the process pa
 
 One `asInvoker` launcher preserves caller permissions and queries the effective process token for elevation. Standard permissions launch the game EXE directly with `SteamAppId`; administrator permissions request startup through Steam immediately. Neither path waits for Enter. Use administrator mode if you need the Steam in-game overlay. Close the game first, then right-click the launcher and select Run as administrator to let the tool launch it through Steam. Game-side Steam authentication still applies. A Steam startup request times out after three minutes. Existing game processes are rejected: close all instances manually, then reopen the tool. PID selection and direct injection commands have been removed. Standard mode targets only its newly created child; Steam mode waits for a new process after its own startup request and rejects multiple instances. After updates or restore, close the game and reopen the tool.
 
-`cargo xtask package` builds the single release runtime. It archives the explicit runtime allowlist from `dist/`, both READMEs, `PRODUCT.md`, and the Harmony license. Starting with the next packaged release, all files are nested under a single `frosthaven-lan-v<version>-windows-x64/` directory. It verifies that top-level layout, extracted files, hashes, and the embedded `asInvoker` manifest, then writes the ZIP and SHA256 to `artifacts/`. Runtime state files are excluded. Building uses runtime reflection and does not require installed game assemblies.
+`cargo xtask package` builds the single release runtime. It archives the explicit runtime allowlist from `dist/`, both READMEs, `PRODUCT.md`, and the Harmony license. Starting with the next packaged release, all files are nested under a single `frosthaven-lan/` directory; the ZIP filename retains the version number. It verifies that top-level layout, extracted files, hashes, and the embedded `asInvoker` manifest, then writes the ZIP and SHA256 to `artifacts/`. Runtime state files are excluded. Building uses runtime reflection and does not require installed game assemblies.
 
 Advanced commands include `start`, `locate`, `verify`, and `command <status|steam-status|restore>`. `start` requires the game to be closed, launches it, and confirms backend readiness. End multiplayer before restore. Runtime errors and command results go directly to the console through a process-lifetime named memory mapping; no log or command files are written. A loaded DLL alone does not confirm a ready LAN backend.
 

@@ -11,6 +11,7 @@ $dist = Join-Path $root 'dist'
 $artifacts = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 $packageName = "frosthaven-lan-v$version-windows-x64"
+$packageDirectory = 'frosthaven-lan'
 $zip = Join-Path $artifacts "$packageName.zip"
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -53,15 +54,15 @@ try {
         foreach ($name in $files) {
             $source = Join-Path $dist $name
             if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing runtime file: $name" }
-            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $source, "$packageName/$name", [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $source, "$packageDirectory/$name", [IO.Compression.CompressionLevel]::Optimal) | Out-Null
         }
     } finally { $archive.Dispose(); $stream.Dispose() }
     [IO.Compression.ZipFile]::ExtractToDirectory($zip, $temporary)
     $topLevel = @(Get-ChildItem -LiteralPath $temporary -Force)
-    if ($topLevel.Count -ne 1 -or !$topLevel[0].PSIsContainer -or $topLevel[0].Name -ne $packageName) {
+    if ($topLevel.Count -ne 1 -or !$topLevel[0].PSIsContainer -or $topLevel[0].Name -ne $packageDirectory) {
         throw 'Archive must contain exactly one package directory at the top level'
     }
-    $runtime = Join-Path $temporary $packageName
+    $runtime = Join-Path $temporary $packageDirectory
     $actual = @(Get-ChildItem -LiteralPath $runtime -Force | Select-Object -ExpandProperty Name)
     if (Compare-Object $files $actual) { throw 'Unexpected archive contents' }
     foreach ($name in $files) {
