@@ -66,7 +66,9 @@ artifacts/frosthaven-lan-v<版本>-windows-x64.zip
 artifacts/frosthaven-lan-v<版本>-windows-x64.zip.sha256
 ```
 
-打包会解压核对文件列表与内容哈希，并从 EXE 资源中读取清单，确认 `requireAdministrator` 和 `uiAccess=false`。最终用户无需安装 Rust。
+ZIP 内所有文件统一放在 `frosthaven-lan-v<版本>-windows-x64/` 文件夹中，顶层不散放文件。此结构从下一次打包发布开始使用。
+
+打包会解压确认顶层仅有该文件夹，再核对其中的文件列表与内容哈希，并从 EXE 资源中读取清单，确认 `requireAdministrator` 和 `uiAccess=false`。最终用户无需安装 Rust。
 
 ## 高级命令与恢复
 
@@ -145,7 +147,7 @@ The Rust launcher discovers Steam installations and verifies both the process pa
 
 Production embeds `requireAdministrator` and requests startup through the Steam protocol only when Enter is pressed. A Steam startup request times out after three minutes. Dev uses `asInvoker`, separate build/runtime directories, and direct game EXE startup with `SteamAppId`; game-side Steam authentication still applies. Existing processes are reused, `--pid` selects between instances, and repeated launches query the actual backend. Restart the game after payload updates or restore.
 
-`cargo xtask package` always builds production with dev features disabled. It archives the explicit runtime allowlist from `dist/`, both READMEs, `PRODUCT.md`, and the Harmony license. It verifies extracted files, hashes, and the embedded administrator manifest, then writes the ZIP and SHA256 to `artifacts/`. Dev binaries and logs are excluded. Building uses runtime reflection and does not require installed game assemblies.
+`cargo xtask package` always builds production with dev features disabled. It archives the explicit runtime allowlist from `dist/`, both READMEs, `PRODUCT.md`, and the Harmony license. Starting with the next packaged release, all files are nested under a single `frosthaven-lan-v<version>-windows-x64/` directory. It verifies that top-level layout, extracted files, hashes, and the embedded administrator manifest, then writes the ZIP and SHA256 to `artifacts/`. Dev binaries and logs are excluded. Building uses runtime reflection and does not require installed game assemblies.
 
 Advanced commands include `start --pid <PID>`, `inject <PID>`, `locate`, `verify`, and `command <status|steam-status|restore>`. `start` confirms backend readiness; `inject` only loads the bridge. End multiplayer before restore. Native diagnostics are in `native.log`, dependency/entry failures in `bootstrap.log`, and patch/backend/command output in `payload.log`. No-argument launcher failures are saved in `launcher-error.log`. A loaded DLL alone does not confirm a ready LAN backend.
 

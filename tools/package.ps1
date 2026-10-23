@@ -10,7 +10,8 @@ $files = @('frosthaven-lan.exe', 'LanBridge.dll', 'Bootstrap.dll', 'LanPayload.d
 $dist = Join-Path $root 'dist'
 $artifacts = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
-$zip = Join-Path $artifacts "frosthaven-lan-v$version-windows-x64.zip"
+$packageName = "frosthaven-lan-v$version-windows-x64"
+$zip = Join-Path $artifacts "$packageName.zip"
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type @"
@@ -52,18 +53,23 @@ try {
         foreach ($name in $files) {
             $source = Join-Path $dist $name
             if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing runtime file: $name" }
-            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $source, $name, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $source, "$packageName/$name", [IO.Compression.CompressionLevel]::Optimal) | Out-Null
         }
     } finally { $archive.Dispose(); $stream.Dispose() }
     [IO.Compression.ZipFile]::ExtractToDirectory($zip, $temporary)
-    $actual = @(Get-ChildItem -LiteralPath $temporary -File | Select-Object -ExpandProperty Name)
+    $topLevel = @(Get-ChildItem -LiteralPath $temporary -Force)
+    if ($topLevel.Count -ne 1 -or !$topLevel[0].PSIsContainer -or $topLevel[0].Name -ne $packageName) {
+        throw 'Archive must contain exactly one package directory at the top level'
+    }
+    $runtime = Join-Path $temporary $packageName
+    $actual = @(Get-ChildItem -LiteralPath $runtime -Force | Select-Object -ExpandProperty Name)
     if (Compare-Object $files $actual) { throw 'Unexpected archive contents' }
     foreach ($name in $files) {
         $expected = (Get-Sha256 (Join-Path $dist $name))
-        $extracted = (Get-Sha256 (Join-Path $temporary $name))
+        $extracted = (Get-Sha256 (Join-Path $runtime $name))
         if ($expected -ne $extracted) { throw "Archive integrity check failed: $name" }
     }
-    [xml]$manifest = [ExecutableManifest]::Read((Join-Path $temporary 'frosthaven-lan.exe'))
+    [xml]$manifest = [ExecutableManifest]::Read((Join-Path $runtime 'frosthaven-lan.exe'))
     $level = $manifest.SelectSingleNode("//*[local-name()='requestedExecutionLevel']")
     if ($null -eq $level -or $level.level -ne 'requireAdministrator' -or $level.uiAccess -ne 'false') {
         throw 'The launcher must require administrator permission'
