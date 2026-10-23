@@ -29,6 +29,14 @@ pub fn text<'a>(zh: &'a str, en: &'a str) -> &'a str {
         en
     }
 }
+/// Reserve the spinner column for completed/static startup messages too.
+pub fn line(message: impl std::fmt::Display) {
+    if io::stdout().is_terminal() {
+        println!("  {message}");
+    } else {
+        println!("{message}");
+    }
+}
 pub struct Progress {
     stop: Option<mpsc::Sender<()>>,
     worker: Option<thread::JoinHandle<()>>,
@@ -40,7 +48,7 @@ impl Progress {
         let message = message.into();
         let interactive = io::stdout().is_terminal();
         if !interactive {
-            println!("{message}");
+            line(&message);
             return Self {
                 stop: None,
                 worker: None,
@@ -81,7 +89,8 @@ impl Drop for Progress {
             let _ = worker.join();
         }
         if self.interactive {
-            println!("\r  {}", self.message);
+            print!("\r");
+            line(&self.message);
         }
     }
 }

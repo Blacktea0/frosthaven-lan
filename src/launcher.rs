@@ -84,11 +84,11 @@ pub fn start(dir: &Path) -> Result<()> {
     let game = discovery::locate()?;
     verify_game(&game)?;
     drop(mode_progress);
-    println!(
+    ui::line(format!(
         "{}{}",
         ui::text("定位到游戏目录：", "Game directory: "),
         game.display()
-    );
+    ));
     let pid = {
         let _progress = ui::Progress::new(ui::text("正在启动游戏中", "Starting the game"));
         wait_for_game(elevated, &game)?
