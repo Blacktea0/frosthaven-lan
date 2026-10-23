@@ -12,6 +12,8 @@ A Windows x64 LAN tool for Frosthaven. It enables the built-in ENet backend thro
 
 When enabled, the main menu version label ends with `LAN Enabled`, and invite-code UI text uses the host IP instead.
 
+LAN connections enable both game-message and avatar channels to synchronize players' Steam avatars through the game's existing mechanism. Each player's local Steam client must still successfully retrieve their avatar.
+
 See [PRODUCT.md](PRODUCT.md) for design details, advanced commands, and troubleshooting.
 
 ## How to use

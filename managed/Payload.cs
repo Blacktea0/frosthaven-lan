@@ -39,6 +39,7 @@ namespace FrosthavenLan {
     harmony.Patch(AccessTools.Method(init,"MoveNext"),transpiler:new HarmonyMethod(typeof(Payload),"SwapConstructor"));
     var ui=Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow",true);
     harmony.Patch(AccessTools.Method(ui,"AwakeInit"),postfix:new HarmonyMethod(typeof(Payload),"InputPatch"));
+    LanChannels.Install(harmony,Enet);
     LanUi.Install(harmony);LanText.Install(harmony);DiagnosticTrace.Write("Harmony installation complete; waiting for game-thread network initialization");
    } catch(Exception e){Session.Report("INSTALL ERROR "+e);if(harmony!=null){harmony.UnpatchAll(harmony.Id);harmony=null;}}
   }

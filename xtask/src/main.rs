@@ -65,6 +65,7 @@ fn build(root: &Path) -> Result<()> {
             "LanPayload.dll",
             vec![
                 "managed/Payload.cs",
+                "managed/LanChannels.cs",
                 "managed/LanText.cs",
                 "managed/LanCopy.cs",
                 "managed/LanUi.cs",
@@ -121,6 +122,7 @@ fn test_managed(root: &Path) -> Result<()> {
         ("SessionTests", "Session"),
         ("LanCopyTests", "LanCopy"),
         ("LanUiTests", "LanUi"),
+        ("LanChannelsTests", "LanChannels"),
     ] {
         let output = root.join(format!("target/{test}.exe"));
         let mut compiler = Command::new(&csc);
@@ -136,6 +138,9 @@ fn test_managed(root: &Path) -> Result<()> {
             compiler
                 .arg(root.join(r"managed\LanCopy.cs"))
                 .arg(format!("/r:{}", root.join("target/0Harmony.dll").display()));
+        }
+        if test == "LanChannelsTests" {
+            compiler.arg(format!("/r:{}", root.join("target/0Harmony.dll").display()));
         }
         run(compiler)?;
         let mut test = Command::new(output);
