@@ -43,6 +43,7 @@ fn build(root: &Path, dev: bool) -> Result<()> {
     for (source, name) in [
         ("README.md", "README.md"),
         ("README.en.md", "README.en.md"),
+        ("PRODUCT.md", "PRODUCT.md"),
         ("vendor/harmony/LICENSE", "Harmony-LICENSE.txt"),
     ] {
         fs::copy(root.join(source), dist.join(name))?;

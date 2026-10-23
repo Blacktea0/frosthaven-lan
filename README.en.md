@@ -5,116 +5,59 @@
 
 [简体中文](README.md)
 
-Windows x64 LAN injection tool for Frosthaven. It switches the network backend to built-in ENet while retaining game sessions, player checks, and synchronization. Patches apply only in memory; game files, Steam DLLs, and language resources are not replaced.
+## Introduction
 
-Rust handles launching, injection, Steam discovery, and Mono bridging. The C# payload uses Harmony and resolves game types at runtime. Application logs and messages are in English; game text supports all 12 languages.
+A Windows x64 LAN tool for Frosthaven. It enables the built-in ENet backend through in-memory injection without modifying installed game files. Currently supports **Retail 1.0.34121 Steam**.
 
-## Requirements
+See [PRODUCT.md](PRODUCT.md) for design details, advanced commands, and troubleshooting.
 
-- Windows x64, Steam installed and signed in, and Frosthaven able to launch through Steam.
-- Supported game: Retail 1.0.34121 Steam. Other versions are rejected.
-- Administrator permission: the executable embeds `requireAdministrator`. Approve Windows UAC, or use an administrator terminal for CLI commands.
+## How to use
 
-Supported `Assembly-CSharp.dll` SHA256:
+1. Install and sign in to Steam, and confirm the game launches normally. Both players need the same game and patch version.
+2. Download the ZIP from [Releases](https://github.com/Blacktea0/frosthaven-lan/releases/latest) and **extract all files** into a writable folder. Do not copy only the EXE.
+3. Double-click `frosthaven-lan.exe` and approve administrator access. Start the game through Steam yourself, or press Enter in the tool to request Steam startup. An existing game process is reused.
+4. Wait for `LAN backend ready`. The host loads a campaign and opens multiplayer from the pause menu.
+5. The client selects Multiplayer → Join Game and enters the host IPv4 address (for example `192.168.1.20`, without a port). The host assigns characters and confirms.
+
+Allow **UDP 30000** across the network. Other computers must use the host's actual IP rather than the `localhost` shown in the host UI. Steam identity initialization is still required; fully offline startup is unsupported.
+
+After injection, press Enter to close the tool; the game keeps running. Check `launcher-error.log` in the extracted folder if injection fails. Restart the game after updating the patch.
+
+## Development requirements
+
+- Windows x64.
+- Rust stable with the `x86_64-pc-windows-msvc` toolchain.
+- Visual Studio C++ Build Tools with MSVC and the Windows SDK.
+- Windows .NET Framework C# compiler: `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`.
+- Windows PowerShell for ZIP packaging.
+
+Harmony 2.3.3 is included. Building does not require the game; live injection tests require the supported game and Steam environment.
+
+## Building and development
+
+Run from the repository root. Close the game before rebuilding.
 
 ```text
-20e5c317378426b0b3bf2833e4f54ed34677e062dafcaeecedd1b09340a606c5
+cargo xtask build-dev       # Build the dev runtime in dist-dev/
+cargo xtask dev             # Build and run the dev launcher
+cargo xtask dev --pid <PID> # Use an existing game process
 ```
 
-The injector checks the process against Steam's registered installation and verifies this hash. Steam libraries and custom installation paths are discovered automatically.
-
-## Download and run
-
-Download the ZIP from GitHub Releases and extract **all files** into a writable folder. Double-click `frosthaven-lan.exe` and approve UAC. Keep these five runtime files together:
+The dev build does not request administrator access. If no game is running, it launches the game EXE directly without a Steam launch request. Game-side Steam identity initialization still applies.
 
 ```text
-frosthaven-lan.exe
-LanBridge.dll
-Bootstrap.dll
-LanPayload.dll
-0Harmony.dll
+cargo xtask build           # Build the production runtime in dist/
+cargo xtask package         # Write production ZIP and SHA256 to artifacts/
+cargo xtask run             # Run production from an administrator terminal
 ```
 
-The archive also includes both READMEs and the Harmony license. Rust is not required to run it.
-
-When the game is not running, start it through Steam yourself or press Enter to request startup via `steam://rungameid/2347080`. The tool waits and injects automatically once detected; close its window to cancel. A requested Steam startup times out after three minutes. The game EXE is never launched directly. Existing game processes are reused; an already enabled patch is reported without another injection.
-
-After injection, press Enter to close the console; the game keeps running. Failures are written to `launcher-error.log`. Restart the game after updating the payload or restoring the original backend. Use `--pid` when multiple instances are running, with separate extracted runtime folders to avoid sharing command files.
-
-## Multiplayer
-
-1. Both players use the same supported game and patch version, with network connectivity.
-2. The host loads a campaign and opens multiplayer from the pause menu.
-3. The client selects Multiplayer → Join Game and enters the host IPv4 address, such as `192.168.1.20`, without a port.
-4. The host assigns characters and confirms entry.
-
-The game uses **UDP 30000**. The host UI currently shows `localhost`; other computers must use the actual host IP. Steam identity initialization remains required; fully offline startup is unsupported.
-
-## Build and package
-
-Install Rust stable for `x86_64-pc-windows-msvc` and Visual Studio C++ Build Tools. The build uses the Windows .NET Framework compiler at `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`. Harmony 2.3.3 and its license are included in `vendor/harmony/`. No installed game is needed to build. Close the game before rebuilding loaded DLLs.
+Production always requires administrator access. Packaging uses only the production build. Use `xtask` for the complete runtime; `cargo build` alone builds only Rust components.
 
 ```text
-cargo xtask build
-cargo xtask package
-cargo xtask run
-cargo xtask run --pid <PID>
-```
-
-`build` produces `dist/`. `package` builds and creates `artifacts/frosthaven-lan-v<version>-windows-x64.zip` and a SHA256 checksum. Packaging verifies extracted contents, hashes, and the administrator manifest. Only explicitly listed runtime and documentation files are included. The native C runtime is statically linked.
-
-`run` builds when no game process exists, then waits for startup. With a running game it uses the existing package. Use an administrator terminal. `cargo build --release --locked` alone builds only Rust components.
-
-## Development build and injection testing
-
-```text
-cargo xtask build-dev
-cargo xtask dev
-cargo xtask dev --pid <PID>
+cargo fmt --all -- --check
+cargo test --workspace --locked
+cargo test --workspace --locked --features dev-launcher
 cargo xtask test-managed
 ```
 
-The dev build has separate Cargo output in `target/dev-build/` and a complete runtime in `dist-dev/`. Its `asInvoker` manifest does not request elevation. When no game is running, it launches `Frosthaven.exe` directly from the Steam-registered installation, without a Steam launch request. Game-side Steam identity initialization still applies; this does not bypass login or ownership checks. A non-elevated dev process cannot access an elevated game. Use `--pid` to select an existing instance.
-
-Cold-start injection now waits for the Mono root domain and the required game/Unity managed assemblies. Previously, Mono could be present before Unity assemblies appeared in the managed assembly list, causing installation to fail. Timeouts and Bootstrap failures include diagnostics. `test-managed` covers delayed loading, already loaded assemblies, and timeout handling without starting the game.
-
-`cargo xtask build` and `cargo xtask package` always build the production variant with dev features disabled. Production still requires administrator permission and requests game startup through Steam. Packaging reads only `dist/` and verifies `requireAdministrator`; dev files are never included in Release archives.
-
-## Commands and recovery
-
-```text
-.\dist\frosthaven-lan.exe
-.\dist\frosthaven-lan.exe start --pid <PID>
-.\dist\frosthaven-lan.exe inject <PID>
-cargo xtask locate
-cargo xtask verify
-cargo xtask command status
-cargo xtask command steam-status
-cargo xtask command restore
-```
-
-`locate` shows the Steam installation; `verify` checks its game assembly. Payload command results are in `dist/payload.log`, native diagnostics in `dist/native.log`, bootstrap failures in `dist/bootstrap.log`. Game logs use their normal location.
-
-End multiplayer before `restore`, which restores the original backend, removes method patches, and refreshes the UI. Loaded DLLs and input settings are fully released on game exit. The game continues writing normal configuration and saves.
-
-## Localization
-
-The patch replaces the invite-code prompt with a host-IP prompt and the hosting confirmation with a LAN confirmation. It follows the active game language: English, German, French, Italian, Spanish, Brazilian Portuguese, Hungarian, Russian, simplified/traditional Chinese, Japanese, and Korean. Language files remain unchanged.
-
-## Releases and contributing
-
-Push a `v*` tag matching `Cargo.toml` (for example `v0.2.0`) to trigger a Windows GitHub Actions build, archive verification, and GitHub Release containing the ZIP and checksum. Release notes repeat the antivirus warning. Build logs are available in Actions.
-
-Use English Conventional Commits, such as `feat: add release packaging`. See [AGENTS.md](AGENTS.md).
-
-## Source layout
-
-- `src/`: Rust CLI, launcher, Steam discovery, Mono bridge, Windows API.
-- `managed/`: C# patches and game text.
-- `xtask/`: build tasks.
-- `tools/`: packaging and read-only analysis helpers.
-- `docs/reverse-engineering/`: analysis and evidence.
-- `vendor/harmony/`: Harmony DLL, license, provenance.
-- `target/`, `dist/`, `artifacts/`, `logs/`: ignored generated files.
-
-[Analysis notes (Chinese)](docs/reverse-engineering/README.md) · [Harmony provenance](vendor/harmony/README.md)
+Use English [Conventional Commits](AGENTS.md), such as `fix: wait for runtime assemblies`.
