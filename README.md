@@ -14,6 +14,8 @@ Windows x64 的 Frosthaven 局域网联机工具，通过内存注入启用游�
 
 LAN 连接启用游戏消息和头像两个通道，支持沿用游戏原有机制同步玩家 Steam 头像；头像仍需由各玩家本机 Steam 成功取得。
 
+头像从 Steam 纹理的原始像素生成可读副本，保留源尺寸，避免原游戏的固定 128×128 GPU 缩放；网络头像禁用 mipmap，不改变游戏整体画质设置。`command status` 同时输出当前头像尺寸、mipmap 状态和 PNG SHA256，便于检查同步一致性。
+
 详细设计、命令和故障排查见 [PRODUCT.md](PRODUCT.md)。
 
 ## 如何使用
@@ -58,5 +60,3 @@ cargo fmt --all -- --check
 cargo test --workspace --locked
 cargo xtask test-managed
 ```
-
-提交使用英文 [Conventional Commits](AGENTS.md)，例如 `fix: wait for runtime assemblies`。

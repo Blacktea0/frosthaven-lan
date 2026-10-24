@@ -111,3 +111,37 @@ NetworkPlayer.StartLoadingAvatarCrt / SendAvatarDataToPlayer
 这次实测直接验证了此前复现故障已修复。可见头像的对照证据来自房主管理界面；客户端进入场景与控制归属也已观察确认。尚未覆盖两台物理电脑、不同账号、三人转发与重连场景。
 
 检查通过：`cargo fmt --all -- --check`、`cargo test --workspace --locked`、`cargo xtask test-managed`、`cargo xtask package`。新增托管测试通过真实 Harmony patch/unpatch 验证通道数、其他 ENet 调用不受影响、方法形状不匹配时拒绝安装；编译和测试不依赖安装游戏程序集。打包在关闭旧实例后执行，之后才按用户要求进行手动双实例验收。
+
+## 头像清晰度调查
+
+`v0.4.0` 只修改 ENet 通道协商，没有修改头像尺寸或编码质量。原游戏 `NetworkPlayer.StartLoadingAvatarCrt` 无论输入头像尺寸如何，都会先用 `RenderTexture.GetTemporary(128, 128, 0)` 缩放到 128 × 128，再读取 RGB24 纹理用于本机展示和网络发送。
+
+平台层已经调用 `SteamFriends.GetLargeAvatarAsync`，并按返回图片尺寸创建纹理。当前机器 Steam 头像缓存中的 PNG 经文件头检查为 184 × 184；缓存尺寸只能证明这张缓存图的尺寸，不等于已测量本次 Steam API 回调返回的实际纹理尺寸。
+
+网络发送使用 PNG 和可还原压缩；接收端从 token 读取纹理宽高，并直接 LoadImage，没有固定 128 的再次缩放。因此在协议层保留较大图片是可行的，已确认的主动降采样发生在发送前。建议后续实现按源纹理实际尺寸创建可读副本（设置合理尺寸上限），避免固定降到 128；不要将小图盲目放大冒充新增细节。以 184 × 184 来源计算，保留源尺寸比 128 × 128 增加约 44% 的每边像素、约 2.07 倍总像素。实际显示改善及数据量需要修复后的双实例对照验证。
+
+本节仅为静态调查与缓存尺寸检查，尚未实现清晰度补丁，也未测量本次 UI 的实际像素尺寸或缩放滤波影响。
+
+### 用户提供的严重模糊截图与进一步排查
+
+截图中远端头像明显比本机模糊；它是 UI 显示结果，不能直接当作实际传输 PNG 的证据。固定 128 × 128 并不保证图像包含 128 × 128 的有效细节：发送前如果从低分辨率 GPU mip 采样，再写入 128 × 128 图片，模糊会被永久编码进 PNG。
+
+进一步静态证据：`NewPlatformSteamUser.CreateTexture2DFromSteamImage` 使用双参数 `new Texture2D(width, height)`；当前 Unity 实现默认创建完整 mip 链，并未忽略 mipmap limit。`Gloomhaven.GraphicsController.SetTextureQuality` 把 FULL/HALF/QUARTER/EIGHTHEN 直接写入 `QualitySettings.globalTextureMipmapLimit`。而发送端头像转换使用 `Graphics.Blit`，因此发送方画质对源纹理 GPU mip 的影响是需优先验证的候选，尚未运行时确认。Unity 2022.3 官方文档说明值 1/2 分别使用半尺寸/四分之一尺寸 mip，且对无 mipmap 纹理无效：https://docs.unity3d.com/2022.3/Documentation/ScriptReference/QualitySettings-globalTextureMipmapLimit.html 。接收端重建纹理显式关闭 mipChain，故不能直接认定其被全局 mip 限制再次缩小。
+
+另已确认 `FFSNet.Utility.CompressData/DecompressData` 使用 `SevenZipHelper`，与 PNG 一起构成无损字节传输；没有 JPEG 质量参数。应比较 Steam 返回原纹理、发送前可读纹理/编码 PNG、接收后解码图片三处的实际尺寸、mipmap 与像素内容/哈希，区分发送前损失、传输异常和 UI 采样。当前尚未捕获这些运行时数据，不能宣布截图的根因已经确认。
+
+### 清晰度修复与真实双实例验收
+
+新增 `LanAvatarQuality`，在本机玩家头像加载协程中，以读取 CPU mip 0 的 RGBA32 原始像素替换整个 RenderTexture/Graphics.Blit/ReadPixels 转换块。创建无 mipmap 的独立可读纹理，保持实际源宽高与 alpha，不变更全局画质或平台缓存；利用游戏现有 `_isAvatarCreatedFromStream` 清理路径释放新建纹理和 Sprite。原有头像加载等待、广播、分片及重建流程继续使用。补丁验证原方法形状，restore 随 Harmony 补丁移除。
+
+`status` 增加每个玩家的本机/远端标记、头像宽高、mipmap 数、实际 mip 限制、PNG 大小和 SHA256，仅通过现有内存 IPC 输出，不写运行时文件。
+
+真实验收使用两个由临时测试启动器启动并注入的游戏实例、同一 Steam 账号、同一战役与 `127.0.0.1`。两端均成功进入 LAN 会话。房主底部玩家列表和角色分配弹窗中，本机与远端头像均呈现清楚的图片细节。两进程的内存状态均报告：
+
+- 本机头像与对端头像均为 184 × 184。
+- mipmapCount = 1，activeMipmapLimit = 0。
+- 重新编码 PNG 均为 87,202 字节，四个副本 SHA256 一致：`50FDE98A16A8738966F6031AEA83DEB63FFC7632EEC17C674203C56EE58BD642`。
+
+结果证明本轮游戏实测的图片在发送与接收之间没有新增像素差异，且双方保留了原尺寸；并非将低清截图放大。尚未直接捕获用户截图对应的旧版本中间图片，因此不能把其严重模糊唯一归因为某个 mip 设置。此次修复绕过了原 GPU 采样损失路径。
+
+已通过格式检查、Rust workspace 测试、托管回归测试和完整运行包构建。新增测试实际 patch/unpatch 模拟头像协程，逐像素校验 RGBA 保真、184 尺寸、低画质源 mip 状态不被修改、网络副本禁用 mipmap、资源所有权与恢复原逻辑。测试不引用安装游戏程序集。未发布新版本。

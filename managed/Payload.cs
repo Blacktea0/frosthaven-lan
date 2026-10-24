@@ -40,6 +40,7 @@ namespace FrosthavenLan {
     var ui=Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow",true);
     harmony.Patch(AccessTools.Method(ui,"AwakeInit"),postfix:new HarmonyMethod(typeof(Payload),"InputPatch"));
     LanChannels.Install(harmony,Enet);
+    LanAvatarQuality.Install(harmony,Game.GetType("FFSNet.NetworkPlayer",true));
     LanUi.Install(harmony);LanText.Install(harmony);DiagnosticTrace.Write("Harmony installation complete; waiting for game-thread network initialization");
    } catch(Exception e){Session.Report("INSTALL ERROR "+e);if(harmony!=null){harmony.UnpatchAll(harmony.Id);harmony=null;}}
   }
@@ -86,7 +87,7 @@ namespace FrosthavenLan {
      foreach(string name in new[]{"IsValid","IsLoggedOn","IsOverlayEnabled"}){var prop=type.GetProperty(name,BindingFlags.Public|BindingFlags.Static);if(prop!=null)Session.Report("STEAM_STATUS "+typeName+"."+name+"="+prop.GetValue(null,null));}
     }Session.Report("STEAM_STATUS_DONE");return;
    }
-   if(cmd=="status"){Session.Report("STATUS backend="+Backend.GetValue(null)+" running="+Prop("IsRunning"));return;}
+   if(cmd=="status"){Session.Report("STATUS backend="+Backend.GetValue(null)+" running="+Prop("IsRunning"));Session.Report(LanAvatarQuality.Describe());return;}
    if(cmd=="restore"){
     var current=Backend.GetValue(null);
     if(Running(current))throw new Exception("Cannot restore during active game session");

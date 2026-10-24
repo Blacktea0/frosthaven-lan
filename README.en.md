@@ -14,6 +14,8 @@ When enabled, the main menu version label ends with `LAN Enabled`, and invite-co
 
 LAN connections enable both game-message and avatar channels to synchronize players' Steam avatars through the game's existing mechanism. Each player's local Steam client must still successfully retrieve their avatar.
 
+Avatars use readable copies of the Steam texture's original pixels at their source dimensions, bypassing the game's fixed 128×128 GPU resize. Network avatars disable mipmaps without changing overall graphics quality. `command status` also reports avatar dimensions, mipmap state and PNG SHA256 to check synchronization consistency.
+
 See [PRODUCT.md](PRODUCT.md) for design details, advanced commands, and troubleshooting.
 
 ## How to use
@@ -58,5 +60,3 @@ cargo fmt --all -- --check
 cargo test --workspace --locked
 cargo xtask test-managed
 ```
-
-Use English [Conventional Commits](AGENTS.md), such as `fix: wait for runtime assemblies`.
