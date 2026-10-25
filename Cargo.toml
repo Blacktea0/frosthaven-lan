@@ -1,6 +1,6 @@
 [package]
 name = "frosthaven-lan"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 description = "Windows runtime LAN injector for Frosthaven"
 readme = "README.md"
