@@ -42,6 +42,7 @@ fn wait_for_game(elevated: bool, game: &Path) -> Result<u32> {
 
 fn launch_direct(game: &Path) -> Result<u32> {
     require_closed_game(&game_pids()?)?;
+    require_steam_login()?;
     let mut child = std::process::Command::new(game.join("Frosthaven.exe"))
         .current_dir(&game)
         .env("SteamAppId", APP_ID)
@@ -61,6 +62,27 @@ fn launch_direct(game: &Path) -> Result<u32> {
         }
         thread::sleep(Duration::from_millis(250));
     }
+}
+
+const STEAM_LOGIN_REQUIRED: &str = "Steam login could not be confirmed. Open Steam and finish signing in, then reopen this tool; alternatively run this tool as administrator to launch through Steam.";
+
+fn steam_session_ready(pids: &[u32], active_pid: u32, active_user: u32) -> bool {
+    active_pid != 0 && active_user != 0 && pids.contains(&active_pid)
+}
+
+fn require_steam_login() -> Result<()> {
+    // ActiveProcess describes the current local client session, not server connectivity.
+    // Match its PID to a live Steam process so stale registry values cannot pass alone.
+    let pid = super::win::steam_active_dword("pid")
+        .map_err(|error| trace::context(STEAM_LOGIN_REQUIRED, error))?;
+    let user = super::win::steam_active_dword("ActiveUser")
+        .map_err(|error| trace::context(STEAM_LOGIN_REQUIRED, error))?;
+    let pids = super::win::pids_named("steam.exe")
+        .map_err(|error| trace::context(STEAM_LOGIN_REQUIRED, error))?;
+    if !steam_session_ready(&pids, pid, user) {
+        return Err(STEAM_LOGIN_REQUIRED.into());
+    }
+    Ok(())
 }
 
 pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
@@ -107,7 +129,7 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
         diagnostics.record(if elevated {
             "Requesting Steam startup"
         } else {
-            "Starting game EXE directly"
+            "Checking Steam local login session before starting game EXE directly"
         });
         wait_for_game(elevated, &game)?
     };
@@ -232,6 +254,14 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn steam_login_requires_live_matching_client_and_active_user() {
+        assert!(steam_session_ready(&[12], 12, 42));
+        assert!(!steam_session_ready(&[], 12, 42));
+        assert!(!steam_session_ready(&[13], 12, 42));
+        assert!(!steam_session_ready(&[12], 12, 0));
+        assert!(!steam_session_ready(&[0], 0, 42));
+    }
     #[test]
     fn existing_games_require_manual_shutdown() {
         for pids in [vec![123], vec![123, 456]] {

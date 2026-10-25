@@ -210,6 +210,26 @@ pub fn open_steam_game(app_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn steam_active_dword(name: &str) -> std::io::Result<u32> {
+    let mut value = 0u32;
+    let mut bytes = 4u32;
+    let status = unsafe {
+        RegGetValueW(
+            0x80000001u32 as i32 as isize as Handle,
+            wide(r"Software\Valve\Steam\ActiveProcess").as_ptr(),
+            wide(name).as_ptr(),
+            0x10, // RRF_RT_REG_DWORD; reject unexpected registry types.
+            std::ptr::null_mut(),
+            (&mut value as *mut u32).cast(),
+            &mut bytes,
+        )
+    };
+    if status != 0 {
+        return Err(std::io::Error::from_raw_os_error(status as i32));
+    }
+    Ok(value)
+}
+
 pub fn registry_string(machine: bool, subkey: &str, name: &str, view: u32) -> Option<String> {
     let key = if machine {
         0x80000002u32

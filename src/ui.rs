@@ -117,6 +117,7 @@ pub fn diagnostic(message: &str) -> String {
         "Frosthaven is already running. Close all game instances manually, then reopen this tool. Existing game processes will not be injected." => "游戏已在运行，请手动关闭所有游戏实例后重新打开本工具。",
         "Multiple game instances detected. Close all game instances manually, then reopen this tool." => "检测到多个游戏实例，请手动关闭所有实例后重新打开本工具。",
         "Steam startup timed out. Check Steam and reopen this tool." => "Steam 启动超时，请检查 Steam，并在关闭游戏后重新打开本工具。",
+        _ if message.contains("Steam login could not be confirmed.") => "无法确认 Steam 已登录。请先打开 Steam 并完成登录，再重新打开本工具；也可右键以管理员身份运行，通过 Steam 启动游戏。",
         "Direct game startup timed out" => "游戏启动超时，请关闭游戏后重新打开本工具。",
         "Target game exited" | "Game exited after injection" => "游戏已退出，请重新打开本工具。",
         _ if message.starts_with("Unsupported game assembly SHA256") => "游戏版本不受支持，请使用 README 中列出的游戏版本。",

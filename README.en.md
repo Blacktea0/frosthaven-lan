@@ -28,6 +28,8 @@ See [PRODUCT.md](PRODUCT.md) for design details, advanced commands, and troubles
 
 To enable the **Steam in-game overlay**, launch this tool as administrator. Standard mode starts the game EXE directly; both modes require the tool to start the game.
 
+Standard mode checks the current local Steam login session before starting the game. If login cannot be confirmed, open Steam and finish signing in before retrying, or use administrator mode to launch through Steam. This check does not guarantee Steam service connectivity or avatar availability.
+
 Allow **UDP 30000** across the network. Other computers must use the host's actual IP rather than the `localhost` shown in the host UI. Steam identity initialization is still required; fully offline startup is unsupported.
 
 Startup stages use an animated spinner. Console language follows the Windows locale: Chinese locales use simplified Chinese, all other locales use English, and failed locale detection defaults to simplified Chinese. On success, the tool exits after ten seconds while the game keeps running. On failure, the console displays the full original error, inner exceptions, stack traces, Windows error codes, and timestamped diagnostic history. Every invocation waits for Enter after failure instead of closing automatically. The tool does not generate log files. After updating the patch, close the game and reopen the tool.
