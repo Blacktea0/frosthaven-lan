@@ -106,6 +106,7 @@ extern "system" {
         id: *mut u32,
     ) -> Handle;
     pub fn WaitForSingleObject(h: Handle, ms: u32) -> u32;
+    pub fn GetExitCodeProcess(h: Handle, code: *mut u32) -> i32;
     pub fn GetModuleHandleA(name: *const u8) -> Handle;
     pub fn GetProcAddress(h: Handle, name: *const u8) -> *mut c_void;
     pub fn CreateToolhelp32Snapshot(flags: u32, pid: u32) -> Handle;

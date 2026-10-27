@@ -2,7 +2,7 @@ use super::config::APP_ID;
 use super::{
     discovery, inject, ipc, modules, trace, ui, verify_game,
     win::{game_pids, is_elevated, open_steam_game},
-    Result,
+    Owned, Result,
 };
 use std::{
     path::Path,
@@ -11,6 +11,61 @@ use std::{
 };
 
 const GAME_ALREADY_RUNNING: &str = "Frosthaven is already running. Close all game instances manually, then reopen this tool. Existing game processes will not be injected.";
+
+struct GameProcess {
+    handle: Owned,
+    pid: u32,
+}
+
+impl GameProcess {
+    fn open(pid: u32) -> Result<Self> {
+        // Retain a handle before injection: a PID snapshot loses both the exit
+        // code and process identity once the game has gone away.
+        let handle = unsafe { super::win::OpenProcess(0x00101000, 0, pid) };
+        if handle.is_null() {
+            return Err(trace::context(
+                format!("OpenProcess for startup monitoring failed; PID={pid}, access=0x101000"),
+                std::io::Error::last_os_error(),
+            ));
+        }
+        Ok(Self {
+            handle: Owned(handle),
+            pid,
+        })
+    }
+
+    fn require_running(&self, stage: &'static str, diagnostics: &trace::Diagnostics) -> Result<()> {
+        match unsafe { super::win::WaitForSingleObject(self.handle.0, 0) } {
+            258 => Ok(()), // WAIT_TIMEOUT: the process is still running.
+            0 => {
+                let mut code = 0;
+                if unsafe { super::win::GetExitCodeProcess(self.handle.0, &mut code) } == 0 {
+                    return Err(trace::context(
+                        stage,
+                        trace::context(
+                            format!("GetExitCodeProcess failed; PID={}", self.pid),
+                            std::io::Error::last_os_error(),
+                        ),
+                    ));
+                }
+                diagnostics.record(format!(
+                    "{stage}; PID={}; process exit code={code} (0x{code:08x})",
+                    self.pid
+                ));
+                Err(stage.into())
+            }
+            u32::MAX => Err(trace::context(
+                format!("WaitForSingleObject(process) failed; PID={}", self.pid),
+                std::io::Error::last_os_error(),
+            )),
+            result => Err(format!(
+                "Unexpected process wait result=0x{result:08x}; PID={}",
+                self.pid
+            )
+            .into()),
+        }
+    }
+}
 
 fn require_closed_game(pids: &[u32]) -> Result<()> {
     if !pids.is_empty() {
@@ -134,6 +189,7 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
         wait_for_game(elevated, &game)?
     };
     diagnostics.record(format!("Detected game PID {pid}; validating process path"));
+    let process = GameProcess::open(pid)?;
     diagnostics.connect(pid)?;
     diagnostics.record(format!(
         "Resolving Steam installation for detected game PID {pid}"
@@ -168,11 +224,7 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
     let mut module_attempt = 0u32;
     loop {
         module_attempt += 1;
-        if !game_pids().map_err(|error| trace::context(
-            format!("Enumerating game processes while waiting for Mono failed; target PID={pid}, attempt={module_attempt}"), error
-        ))?.contains(&pid) {
-            return Err("Target game exited".into());
-        }
+        process.require_running("Target game exited", diagnostics)?;
         let loaded = match unsafe { modules(pid) } {
             Ok(modules) => modules.contains_key("mono-2.0-bdwgc.dll"),
             Err(error) => {
@@ -203,14 +255,23 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
         thread::sleep(Duration::from_millis(250));
     }
     unsafe {
-        inject(pid, diagnostics)?;
+        if let Err(error) = inject(pid, diagnostics) {
+            // Preserve the original injection error even if the game died in
+            // an API call; append process state to the diagnostic history.
+            if let Err(exit) = process.require_running("Game exited during injection", diagnostics)
+            {
+                diagnostics.record(format!("Injection process check: {exit:?}"));
+            }
+            return Err(error);
+        }
     }
     let deadline = Instant::now() + Duration::from_secs(150);
     let mut last_channel_error = None;
     let mut last_state = None;
     loop {
-        if !game_pids()?.contains(&pid) {
-            return Err("Game exited after injection".into());
+        if let Err(error) = process.require_running("Game exited after injection", diagnostics) {
+            diagnostics.record(format!("Last startup state: {last_state:?}; last shared-memory error: {last_channel_error:?}"));
+            return Err(error);
         }
         match ipc::Channel::open(pid) {
             Ok(channel) => {
@@ -254,6 +315,33 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn process_monitor_retains_exit_code_after_process_disappears() {
+        // Use a harmless child shell, never the game or injection path.
+        let mut child = std::process::Command::new("cmd.exe")
+            .args(["/d", "/c", "exit 37"])
+            .spawn()
+            .unwrap();
+        // The Child handle keeps the process object alive even if it exits
+        // before the monitor opens it.
+        let process = GameProcess::open(child.id()).unwrap();
+        assert_eq!(child.wait().unwrap().code(), Some(37));
+        let diagnostics = trace::Diagnostics::default();
+        assert!(process
+            .require_running("Game exited after injection", &diagnostics)
+            .is_err());
+        let report = diagnostics.records.snapshot().join("\n");
+        assert!(report.contains("process exit code=37 (0x00000025)"));
+    }
+
+    #[test]
+    fn process_monitor_accepts_running_process() {
+        let process = GameProcess::open(std::process::id()).unwrap();
+        process
+            .require_running("Target game exited", &trace::Diagnostics::default())
+            .unwrap();
+    }
+
     #[test]
     fn steam_login_requires_live_matching_client_and_active_user() {
         assert!(steam_session_ready(&[12], 12, 42));

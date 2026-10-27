@@ -7,6 +7,32 @@ use std::{
     ptr,
 };
 use win::*;
+
+const MONO_STARTUP_TIMEOUT: &str = "Mono root domain and main thread initialization timed out";
+
+fn wait_for_runtime(
+    timeout: std::time::Duration,
+    mut probe: impl FnMut() -> (Handle, Handle),
+    mut pause: impl FnMut(),
+) -> Result<Handle, &'static str> {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        let (domain, main_thread) = probe();
+        // The root domain is published before Mono initializes the thread class
+        // and its vtable. Attaching at that point can abort the whole game.
+        // Unity publishes the managed main thread after initializing Mono.
+        // Only observe the pointers here; do not dereference managed objects on
+        // this unattached native thread.
+        if !domain.is_null() && !main_thread.is_null() {
+            return Ok(domain);
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(MONO_STARTUP_TIMEOUT);
+        }
+        pause();
+    }
+}
+
 unsafe fn directory(h: Handle) -> PathBuf {
     let mut p = [0u16; 32768];
     GetModuleFileNameW(h, p.as_mut_ptr(), p.len() as u32);
@@ -82,6 +108,7 @@ unsafe extern "system" fn worker(h: Handle) -> u32 {
         };
     }
     load!(mono_get_root_domain, unsafe extern "C" fn() -> Handle);
+    load!(mono_thread_get_main, unsafe extern "C" fn() -> Handle);
     load!(mono_thread_attach, unsafe extern "C" fn(Handle) -> Handle);
     load!(mono_thread_detach, unsafe extern "C" fn(Handle));
     load!(
@@ -104,19 +131,34 @@ unsafe extern "system" fn worker(h: Handle) -> u32 {
         mono_runtime_invoke,
         unsafe extern "C" fn(Handle, Handle, *mut Handle, *mut Handle) -> Handle
     );
-    let _ = trace::send(pid, "Mono API exports resolved; waiting for root domain");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
-    let d = loop {
-        let domain = mono_get_root_domain();
-        if !domain.is_null() {
-            break domain;
-        }
-        if std::time::Instant::now() >= deadline {
-            fail("Mono root domain initialization timed out");
+    let _ = trace::send(pid, "Mono API exports resolved; waiting for root domain and managed main thread; timeout=120 seconds");
+    let mut last_state = None;
+    let d = match wait_for_runtime(
+        std::time::Duration::from_secs(120),
+        || {
+            let domain = mono_get_root_domain();
+            let main_thread = mono_thread_get_main();
+            let state = (domain as usize, main_thread as usize);
+            if last_state != Some(state) {
+                let _ = trace::send(pid, &format!("Mono startup state: root domain={domain:p}; managed main thread={main_thread:p}"));
+                last_state = Some(state);
+            }
+            (domain, main_thread)
+        },
+        || std::thread::sleep(std::time::Duration::from_millis(50)),
+    ) {
+        Ok(domain) => domain,
+        Err(error) => {
+            fail(error);
             return 3;
         }
-        std::thread::sleep(std::time::Duration::from_millis(50));
     };
+    let _ = trace::send(
+        pid,
+        &format!(
+            "Mono root domain and managed main thread detected; attaching worker; domain={d:p}"
+        ),
+    );
     let t = mono_thread_attach(d);
     if t.is_null() {
         fail("Mono thread attachment failed");
@@ -182,4 +224,60 @@ pub unsafe extern "system" fn DllMain(h: *mut c_void, reason: u32, _: *mut c_voi
         }
     }
     1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn root_domain_alone_does_not_allow_attachment() {
+        // Simulate cold startup: the domain exists several polls before the
+        // managed main thread. No game or Mono runtime is loaded by this test.
+        let domain = 1usize as Handle;
+        let main = 2usize as Handle;
+        let mut states = [
+            (ptr::null_mut(), ptr::null_mut()),
+            (domain, ptr::null_mut()),
+            (domain, ptr::null_mut()),
+            (domain, main),
+        ]
+        .into_iter();
+        let mut pauses = 0;
+        let result = wait_for_runtime(
+            Duration::from_secs(1),
+            || states.next().unwrap(),
+            || pauses += 1,
+        );
+        assert_eq!(result, Ok(domain));
+        assert_eq!(pauses, 3);
+    }
+
+    #[test]
+    fn incomplete_runtime_times_out_without_attaching() {
+        for state in [
+            (ptr::null_mut(), ptr::null_mut()),
+            (1usize as Handle, ptr::null_mut()),
+            (ptr::null_mut(), 2usize as Handle),
+        ] {
+            assert_eq!(
+                wait_for_runtime(Duration::ZERO, || state, || panic!("must time out")),
+                Err(MONO_STARTUP_TIMEOUT)
+            );
+        }
+    }
+
+    #[test]
+    fn already_initialized_runtime_needs_no_delay() {
+        let domain = 1usize as Handle;
+        assert_eq!(
+            wait_for_runtime(
+                Duration::ZERO,
+                || (domain, 2usize as Handle),
+                || panic!("already ready")
+            ),
+            Ok(domain)
+        );
+    }
 }

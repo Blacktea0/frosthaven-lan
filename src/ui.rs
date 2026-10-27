@@ -130,7 +130,7 @@ pub fn diagnostic(message: &str) -> String {
         "The target process does not belong to a Frosthaven installation registered with Steam." => "游戏进程与 Steam 登记的安装目录不匹配，请关闭游戏后重新打开本工具。",
         "Mono missing" => "游戏运行时尚未就绪，请关闭游戏后重新打开本工具。",
         "Bootstrap load failed" | "Managed entry failed" => "网络组件入口加载失败，请完整解压运行包，并在关闭游戏后重新打开本工具。",
-        "Mono root domain initialization timed out" | "Mono thread attachment failed" => "无法初始化游戏运行时，请关闭游戏后重新打开本工具。",
+        "Mono root domain initialization timed out" | "Mono root domain and main thread initialization timed out" | "Mono thread attachment failed" => "无法初始化游戏运行时，请关闭游戏后重新打开本工具。",
         _ if message.starts_with("Direct game startup exited:") => "游戏在启动期间退出，请检查游戏和 Steam 状态后重试。",
         _ if message.starts_with("BOOTSTRAP ERROR ") || message.starts_with("INSTALL ERROR ") || message.starts_with("PUMP ERROR ") => return format!("网络组件初始化失败：{message}"),
         _ if message.starts_with("STATUS backend=") => return message.replace("STATUS backend=", "当前网络后端：").replace(" running=", "，会话运行状态："),

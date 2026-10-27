@@ -32,6 +32,8 @@ Standard mode checks the current local Steam login session before starting the g
 
 Allow **UDP 30000** across the network. Other computers must use the host's actual IP rather than the `localhost` shown in the host UI. Steam identity initialization is still required; fully offline startup is unsupported.
 
+During startup, the native bridge waits for both the Mono root domain and managed main thread object before attaching the injection thread, avoiding early attachment based only on the Mono DLL or root domain. The wait is limited to 120 seconds; if the game exits during initialization, console diagnostics retain its process exit code in decimal and hexadecimal. Simulated startup timing tests cover this wait logic; its effect on actual cold starts still requires real-game validation.
+
 Startup stages use an animated spinner. Console language follows the Windows locale: Chinese locales use simplified Chinese, all other locales use English, and failed locale detection defaults to simplified Chinese. On success, the tool exits after ten seconds while the game keeps running. On failure, the console displays the full original error, inner exceptions, stack traces, Windows error codes, and timestamped diagnostic history. Every invocation waits for Enter after failure instead of closing automatically. The tool does not generate log files. After updating the patch, close the game and reopen the tool.
 
 ## Development requirements
