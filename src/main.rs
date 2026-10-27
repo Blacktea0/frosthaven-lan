@@ -68,6 +68,49 @@ fn root() -> Result<PathBuf> {
         .ok_or("Missing exe directory")?
         .to_path_buf())
 }
+fn retry_module_snapshot<T>(
+    pid: u32,
+    diagnostics: &trace::Diagnostics,
+    timeout: std::time::Duration,
+    mut read: impl FnMut() -> Result<T>,
+    mut pause: impl FnMut(),
+) -> Result<T> {
+    let deadline = std::time::Instant::now() + timeout;
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        match read() {
+            Ok(snapshot) => return Ok(snapshot),
+            Err(error) => {
+                if !matches!(trace::os_error_code(error.as_ref()), Some(24) | Some(299)) {
+                    return Err(error);
+                }
+                diagnostics.record(format!("Transient injection module enumeration failure; PID={pid}, attempt={attempt}; {error}; {error:?}"));
+                if std::time::Instant::now() >= deadline {
+                    return Err(trace::context(
+                        format!("Injection module enumeration timed out; PID={pid}"),
+                        error,
+                    ));
+                }
+                pause();
+            }
+        }
+    }
+}
+unsafe fn injection_modules(
+    pid: u32,
+    diagnostics: &trace::Diagnostics,
+) -> Result<HashMap<String, (usize, u32)>> {
+    // DLL loading can invalidate Toolhelp snapshots even after Mono is found.
+    // Retry only enumeration, never the remote LoadLibrary call itself.
+    retry_module_snapshot(
+        pid,
+        diagnostics,
+        std::time::Duration::from_secs(10),
+        || modules(pid),
+        || std::thread::sleep(std::time::Duration::from_millis(50)),
+    )
+}
 fn verify() -> Result<String> {
     fingerprint_game(&discovery::locate()?)
 }
@@ -113,7 +156,7 @@ unsafe fn inject(pid: u32, expected_hash: &str, diagnostics: &trace::Diagnostics
     if !discovery::same_path(Path::new(&text(&name)), &game.join("Frosthaven.exe")) {
         return Err("Refusing non-target process".into());
     }
-    let remote = modules(pid)?;
+    let remote = injection_modules(pid, diagnostics)?;
     if !remote.contains_key("mono-2.0-bdwgc.dll") {
         return Err("Mono not ready".into());
     }
@@ -130,7 +173,7 @@ unsafe fn inject(pid: u32, expected_hash: &str, diagnostics: &trace::Diagnostics
             std::io::Error::last_os_error(),
         ));
     }
-    let local = modules(std::process::id())?;
+    let local = injection_modules(std::process::id(), diagnostics)?;
     let (owner, (base, _)) = local
         .iter()
         .find(|(_, (b, s))| load >= *b && load < *b + *s as usize)
@@ -192,11 +235,68 @@ unsafe fn inject(pid: u32, expected_hash: &str, diagnostics: &trace::Diagnostics
         .into());
     }
     VirtualFreeEx(h.0, mem, 0, 0x8000);
-    if !modules(pid)?.contains_key("lanbridge.dll") {
+    if !injection_modules(pid, diagnostics)?.contains_key("lanbridge.dll") {
         return Err("DLL did not load".into());
     }
     diagnostics.record("LanBridge.dll confirmed in target process module list");
     Ok(())
+}
+
+#[cfg(test)]
+mod module_retry_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn injection_snapshots_retry_transient_errors_and_keep_original_diagnostics() {
+        let diagnostics = trace::Diagnostics::default();
+        let mut attempts = 0;
+        let result = retry_module_snapshot(
+            42,
+            &diagnostics,
+            Duration::from_secs(1),
+            || {
+                attempts += 1;
+                match attempts {
+                    1 => Err(trace::context(
+                        "CreateToolhelp32Snapshot",
+                        std::io::Error::from_raw_os_error(24),
+                    )),
+                    2 => Err(trace::context(
+                        "Module32NextW",
+                        std::io::Error::from_raw_os_error(299),
+                    )),
+                    _ => Ok("snapshot"),
+                }
+            },
+            || {},
+        );
+        assert_eq!(result.unwrap(), "snapshot");
+        assert_eq!(attempts, 3);
+        let records = diagnostics.records.snapshot().join("\n");
+        assert!(records.contains("code: 24") && records.contains("code: 299"));
+        assert!(records.contains("CreateToolhelp32Snapshot") && records.contains("Module32NextW"));
+    }
+
+    #[test]
+    fn access_denial_is_not_retried_and_timeout_preserves_last_os_error() {
+        for code in [5, 24, 299] {
+            let timeout = if code == 5 {
+                Duration::from_secs(1)
+            } else {
+                Duration::ZERO
+            };
+            let error = retry_module_snapshot::<()>(
+                42,
+                &trace::Diagnostics::default(),
+                timeout,
+                || Err(std::io::Error::from_raw_os_error(code).into()),
+                || panic!("must not retry access denial or an expired deadline"),
+            )
+            .unwrap_err();
+            assert_eq!(trace::os_error_code(error.as_ref()), Some(code));
+        }
+    }
 }
 fn command(_dir: &Path, s: &str, diagnostics: &mut trace::Diagnostics) -> Result<()> {
     if !matches!(s, "status" | "steam-status" | "restore") {
