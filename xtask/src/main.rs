@@ -42,8 +42,7 @@ fn build(root: &Path) -> Result<()> {
     fs::create_dir_all(&dist)?;
     for (source, name) in [
         ("README.md", "README.md"),
-        ("README.en.md", "README.en.md"),
-        ("PRODUCT.md", "PRODUCT.md"),
+        ("README.zh-CN.md", "README.zh-CN.md"),
         ("vendor/harmony/LICENSE", "Harmony-LICENSE.txt"),
     ] {
         fs::copy(root.join(source), dist.join(name))?;

@@ -1,65 +1,67 @@
 > [!CAUTION]
-> **杀毒软件误报警告**
-> 本工具需要向游戏进程注入 DLL 并在内存中打补丁，因此可能被杀毒软件误判。官方 Release 二进制包由本仓库的 GitHub Actions 从对应 tag 的源码构建；这不代表绝对安全。如果担心病毒，请自行阅读源码，或让 AI 辅助审查，然后在自己的机器上编译。如果仍然不放心，请不要使用。不要为了使用本工具而关闭杀毒软件。
+> **Antivirus false-positive warning**
+> This tool injects DLLs into the game process and patches code in memory, so antivirus software may flag it. Official Release binaries are built by this repository's GitHub Actions from the corresponding source tag; this is not a guarantee of safety. If you are concerned about malware, read the source yourself or ask AI to help review it, then compile it on your own machine. If you are still uncomfortable, do not use this tool. Do not disable your antivirus to use it.
 
 # Frosthaven LAN
 
-[English](README.en.md)
+[简体中文](README.zh-CN.md)
 
-## 简介
+## Introduction
 
-Windows x64 的 Frosthaven 局域网联机工具，通过内存注入启用游戏内置的 ENet 后端，不修改游戏安装文件。原支持基线为 **Retail 1.0.34121 Steam**；更新版本按运行时代码结构检查，不再绑定固定 DLL 哈希。结构检查通过不代表该版本已完成实机或多人验证。
+A Windows x64 LAN tool for Frosthaven. It enables the built-in ENet backend through in-memory injection without modifying installed game files. The original support baseline is **Retail 1.0.34121 Steam**; updated versions undergo runtime structural checks instead of a fixed DLL hash allowlist. Passing these checks does not mean that a version has undergone real-game or multiplayer validation.
 
-启用后主菜单版本号末尾显示 `LAN Enabled`，联机界面中的邀请码提示改为使用主机 IP。
+When enabled, the main menu version label ends with `LAN Enabled`, and invite-code UI text uses the host IP instead.
 
-LAN 连接启用游戏消息和头像两个通道，支持沿用游戏原有机制同步玩家 Steam 头像；头像仍需由各玩家本机 Steam 成功取得。
+LAN connections enable both game-message and avatar channels to synchronize players' Steam avatars through the game's existing mechanism. Each player's local Steam client must still successfully retrieve their avatar.
 
-头像从 Steam 纹理的原始像素生成可读副本，保留源尺寸，避免原游戏的固定 128×128 GPU 缩放；网络头像禁用 mipmap，不改变游戏整体画质设置。`command status` 同时输出当前头像尺寸、mipmap 状态和 PNG SHA256，便于检查同步一致性。
+Avatars use readable copies of the Steam texture's original pixels at their source dimensions, bypassing the game's fixed 128×128 GPU resize. Network avatars disable mipmaps without changing overall graphics quality. `command status` also reports avatar dimensions, mipmap state and PNG SHA256 to check synchronization consistency.
 
-详细设计、命令和故障排查见 [PRODUCT.md](PRODUCT.md)。
+See the repository's [PRODUCT.md](https://github.com/Blacktea0/frosthaven-lan/blob/main/PRODUCT.md) for design details, advanced commands, and troubleshooting. It is not included in release ZIPs.
 
-## 如何使用
+## How to use
 
-1. 安装并登录 Steam，确认游戏可以正常启动。双方使用相同的游戏版本和补丁。
-2. 从 [Releases](https://github.com/Blacktea0/frosthaven-lan/releases/latest) 下载 ZIP，**完整解压**到可写目录，不要只复制 EXE。
-3. 选择启动方式：**普通双击** `frosthaven-lan.exe`，工具会直接启动游戏本体；**需要 Steam 游戏内叠加界面时，右键 → 以管理员身份运行**，工具会通过 Steam 启动游戏。**必须由本工具启动游戏**；如果检测到游戏已运行，请手动关闭所有游戏实例，再重新打开本工具。
-4. 等待提示“网络组件注入成功，强制局域网联机模式已开启”。房主载入战役，从暂停菜单进入“多人游戏”开房。
-5. 客户端选择“多人游戏 → 加入游戏”，输入房主 IPv4（例如 `192.168.1.20`，不带端口）；房主分配角色并确认。
+1. Install and sign in to Steam, and confirm the game launches normally. Both players need the same game and patch version.
+2. Download the ZIP from [Releases](https://github.com/Blacktea0/frosthaven-lan/releases/latest) and **extract all files** into a writable folder. Do not copy only the EXE.
+3. Choose a startup mode: **double-click** `frosthaven-lan.exe` normally to launch the game EXE directly, or **right-click → Run as administrator if you need the Steam in-game overlay**, which launches the game through Steam. **The game must be started by this tool.** If it is already running, close all game instances manually, then reopen the tool.
+4. Wait for the message confirming successful injection and forced LAN mode. The host loads a campaign and opens multiplayer from the pause menu.
+5. The client selects Multiplayer → Join Game and enters the host IPv4 address (for example `192.168.1.20`, without a port). The host assigns characters and confirms.
 
-如需开启 **Steam 游戏内叠加界面**，请使用管理员模式启动本工具。普通模式直接启动游戏本体；两种模式均由工具启动游戏。
+Keep all five runtime files together: `frosthaven-lan.exe`, `LanBridge.dll`, `Bootstrap.dll`, `LanPayload.dll`, and `0Harmony.dll`. The ZIP also includes `README.md`, `README.zh-CN.md`, and `Harmony-LICENSE.txt`.
 
-普通模式会在启动游戏前检查 Steam 当前登录会话；若未确认登录，请先打开 Steam 并完成登录后重试，或使用管理员模式通过 Steam 启动。此检查不保证 Steam 在线服务或头像请求可用。
+To enable the **Steam in-game overlay**, launch this tool as administrator. Standard mode starts the game EXE directly; both modes require the tool to start the game.
 
-网络需允许 **UDP 30000**。房主界面显示的 `localhost` 不能用于其他电脑连接，请使用房主实际 IP。仍需 Steam 身份初始化，不支持完全离线启动。
+Standard mode checks the current local Steam login session before starting the game. If login cannot be confirmed, open Steam and finish signing in before retrying, or use administrator mode to launch through Steam. This check does not guarantee Steam service connectivity or avatar availability.
 
-启动时，原生桥接会同时等待 Mono 根域和托管主线程对象出现，再附加注入线程，避免仅检测到 Mono DLL 或根域就过早附加。等待上限为 120 秒；游戏在初始化期间退出时，控制台诊断会保留进程退出码（十进制和十六进制）。此等待逻辑已覆盖模拟启动时序测试，首次冷启动的实际效果仍需真机验证。
+Allow **UDP 30000** across the network. Other computers must use the host's actual IP rather than the `localhost` shown in the host UI. Steam identity initialization is still required; fully offline startup is unsupported.
 
-工具根据 EOS 后端构造与字段赋值、ENet 连接调用和头像 GPU 复制流程自动定位补丁方法，不依赖元数据 token、协程编号或这些方法的名称。关键签名与 IL 结构必须一致且候选唯一，否则停止安装补丁并输出完整诊断。此机制可适应保留上述结构的更新；后端类型、界面接口、网络协议或复制流程发生实质变化时，仍可能需要更新工具。SHA256 用于诊断及检查启动期间文件是否变化，不能证明协议兼容。
+During startup, the native bridge waits for both the Mono root domain and managed main thread object before attaching the injection thread, avoiding early attachment based only on the Mono DLL or root domain. The wait is limited to 120 seconds; if the game exits during initialization, console diagnostics retain its process exit code in decimal and hexadecimal. Simulated timing tests and limited manual local startup checks have passed; repeated cold-start stress still requires validation.
 
-启动步骤以动态转圈显示进度。控制台根据 Windows locale 显示简体中文或英文：中文环境使用简体中文，其他语言环境使用英文，无法检测语言时默认简体中文。成功后等待十秒自动退出，游戏继续运行；失败时控制台会展示原始完整错误、内层异常、调用栈、Windows 错误码和带时间戳的诊断记录，所有启动方式均等待按 Enter 关闭，不会自动倒计时退出。工具不生成日志文件。更新补丁后请关闭游戏，再重新打开工具。
+The tool discovers patch methods from EOS backend construction and field assignment, ENet connection calls, and the avatar GPU copy flow, without relying on metadata tokens, coroutine indices, or those method names. Critical signatures and IL structure must match with exactly one candidate; otherwise patch installation stops with full diagnostics. This accommodates updates that retain these structures; substantial changes to backend types, UI interfaces, network protocols, or copy flow may still require a tool update. SHA256 is retained for diagnostics and detecting file changes during startup, and does not prove protocol compatibility.
 
-## 开发环境需求
+Startup stages use an animated spinner. Console language follows the Windows locale: Chinese locales use simplified Chinese, all other locales use English, and failed locale detection defaults to simplified Chinese. On success, the tool exits after ten seconds while the game keeps running. On failure, the console displays the full original error, inner exceptions, stack traces, Windows error codes, and timestamped diagnostic history. Every invocation waits for Enter after failure instead of closing automatically. The tool does not generate log files. After updating the patch, close the game and reopen the tool.
 
-- Windows x64。
-- Rust stable，沿用本机默认工具链，支持以下任一组合：
-  - MSVC：`x86_64-pc-windows-msvc`，配套 Visual Studio C++ Build Tools 和 Windows SDK（包含 `kernel32.lib`）。
-  - GNU：`x86_64-pc-windows-gnu`，配套 MinGW-w64/GCC，确保 `gcc` 和 `windres` 在 PATH 中。
-- Windows .NET Framework C# 编译器：`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`。
-- 系统 PowerShell，用于 ZIP 打包。
+## Development requirements
 
-Harmony 2.3.3 已包含在仓库中。编译无需安装游戏；实际注入测试需要支持版本的游戏及 Steam 环境。
+- Windows x64.
+- Rust stable, using your configured default toolchain with either setup:
+  - MSVC: `x86_64-pc-windows-msvc` plus Visual Studio C++ Build Tools and the Windows SDK (including `kernel32.lib`).
+  - GNU: `x86_64-pc-windows-gnu` plus MinGW-w64/GCC, with `gcc` and `windres` on PATH.
+- Windows .NET Framework C# compiler: `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`.
+- Windows PowerShell for ZIP packaging.
 
-## 如何编译开发
+Harmony 2.3.3 is included. Building does not require the game; live injection tests require the supported game and Steam environment.
 
-在项目根目录执行，重建前先退出游戏。
+## Building and development
+
+Run from the repository root. Close the game before rebuilding.
 
 ```text
-cargo xtask build           # 构建正式版到 dist/
-cargo xtask package         # 生成正式版 ZIP 和 SHA256 到 artifacts/
-cargo xtask run             # 构建并运行，按当前终端权限选择启动方式
+cargo xtask build           # Build the production runtime in dist/
+cargo xtask package         # Write production ZIP and SHA256 to artifacts/
+cargo xtask run             # Build and run using the terminal's permission level
 ```
 
-只有一个运行版本：普通终端直接启动游戏，管理员终端通过 Steam 启动。请使用 `xtask` 生成完整运行包，`cargo build` 仅构建 Rust 部分。
+There is one runtime: standard terminals launch the game directly; administrator terminals launch it through Steam. Use `xtask` for the complete runtime; `cargo build` alone builds only Rust components.
 
 ```text
 cargo fmt --all -- --check

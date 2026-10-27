@@ -6,7 +6,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $metadata = (& cargo metadata --no-deps --format-version 1 --manifest-path (Join-Path $root 'Cargo.toml') | ConvertFrom-Json)
 if ($LASTEXITCODE -ne 0) { throw 'Cargo metadata failed' }
 $version = ($metadata.packages | Where-Object name -eq 'frosthaven-lan').version
-$files = @('frosthaven-lan.exe', 'LanBridge.dll', 'Bootstrap.dll', 'LanPayload.dll', '0Harmony.dll', 'README.md', 'README.en.md', 'PRODUCT.md', 'Harmony-LICENSE.txt')
+$files = @('frosthaven-lan.exe', 'LanBridge.dll', 'Bootstrap.dll', 'LanPayload.dll', '0Harmony.dll', 'README.md', 'README.zh-CN.md', 'Harmony-LICENSE.txt')
 $dist = Join-Path $root 'dist'
 $artifacts = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
