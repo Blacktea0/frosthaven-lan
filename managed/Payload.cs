@@ -8,6 +8,8 @@ namespace FrosthavenLan {
  public static class Payload {
   static Harmony harmony;
   static bool pendingSwitch=true;
+  static volatile bool patchesReady;
+  public static bool CanUseLanBackend(){return patchesReady;}
   static int frame;
   static object originalBackend;
   internal static Assembly Game { get { return RuntimeAssemblies.Require("Assembly-CSharp"); } }
@@ -26,31 +28,56 @@ namespace FrosthavenLan {
   const BindingFlags All=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Static|BindingFlags.Instance;
   static object Prop(string n) { return Net.GetProperty(n,All).GetValue(null,null); }
   static FieldInfo Backend { get { return Net.GetField("_backend",All); } }
+  static void ValidateNetworkContract(){
+   var contract=Game.GetType("FFSNet.Backend.INetworkBackend",true);
+   if(Backend==null||!Backend.IsStatic||Backend.FieldType!=contract||!contract.IsAssignableFrom(Enet)||!contract.IsAssignableFrom(Eos)||!typeof(IDisposable).IsAssignableFrom(Enet))throw new NotSupportedException("Unsupported network backend contract");
+   var running=contract.GetProperty("IsRunning");var handler=contract.GetProperty("ConnectRequestedHandler");
+   if(running==null||!running.CanRead||running.PropertyType!=typeof(bool)||handler==null||!handler.CanRead||!handler.CanWrite)throw new NotSupportedException("Unsupported network backend properties");
+   foreach(string name in new[]{"Manager","CurrentUserToken","IsRunning"}){
+    var property=Net.GetProperty(name,All);
+    if(property==null||property.GetGetMethod(true)==null||!property.GetGetMethod(true).IsStatic||property.GetIndexParameters().Length!=0||(name=="IsRunning"&&property.PropertyType!=typeof(bool)))throw new NotSupportedException("Unsupported FFSNetwork property: "+name);
+   }
+  }
   public static void Install() {
    if(harmony!=null) return;
    try {
     DiagnosticTrace.Write("Waiting for Assembly-CSharp and UnityEngine.CoreModule");
     RuntimeAssemblies.WaitFor(new[]{"Assembly-CSharp","UnityEngine.CoreModule"},120000);
-    DiagnosticTrace.Write("Runtime assemblies loaded; installing Harmony patches");
-    harmony=new Harmony("local.frosthaven.lan.prototype");
+    ValidateNetworkContract();
+    DiagnosticTrace.Write("Runtime assemblies loaded; discovering compatible patch sites; module="+Game.ManifestModule.ModuleVersionId);
+    var init=PatchDiscovery.BackendInitialization(Net,Eos,Enet,Backend);
+    var join=PatchDiscovery.Connect(Enet);
+    var avatar=PatchDiscovery.Avatar(Game.GetType("FFSNet.NetworkPlayer",true));
+    DiagnosticTrace.Write("Discovered backend initialization: "+PatchDiscovery.Describe(init));
+    DiagnosticTrace.Write("Discovered ENet connection: "+PatchDiscovery.Describe(join));
+    DiagnosticTrace.Write("Discovered avatar copy: "+PatchDiscovery.Describe(avatar));
+    // Validate the actual Harmony instruction stream before changing any method.
+    ILGenerator initGenerator;var initCode=PatchProcessor.GetOriginalInstructions(init,out initGenerator);
+    SwapConstructor(initCode,initGenerator).ToArray();
+    LanChannels.ConnectWithAvatarChannel(PatchProcessor.GetOriginalInstructions(join)).ToArray();
+    LanAvatarQuality.PreservePixels(PatchProcessor.GetOriginalInstructions(avatar),avatar).ToArray();
     Type sync=Unity("UnityEngine.Object").Assembly.GetType("UnityEngine.UnitySynchronizationContext",true);
-    harmony.Patch(AccessTools.Method(sync,"Exec"),postfix:new HarmonyMethod(typeof(Payload),"Pump"));
-    var init=Net.GetNestedTypes(All).Single(t=>t.Name.StartsWith("<InitializeCrt>"));
-    harmony.Patch(AccessTools.Method(init,"MoveNext"),transpiler:new HarmonyMethod(typeof(Payload),"SwapConstructor"));
+    var pump=AccessTools.Method(sync,"Exec",Type.EmptyTypes);
+    if(pump==null||pump.IsStatic||pump.ReturnType!=typeof(void))throw new NotSupportedException("Unsupported Unity synchronization context");
+    harmony=new Harmony("local.frosthaven.lan.prototype");
+    harmony.Patch(init,transpiler:new HarmonyMethod(typeof(Payload),"SwapConstructor"));
     var ui=Game.GetType("GLOOM.MainMenu.UIMultiplayerJoinSessionWindow",true);
     harmony.Patch(AccessTools.Method(ui,"AwakeInit"),postfix:new HarmonyMethod(typeof(Payload),"InputPatch"));
-    LanChannels.Install(harmony,Enet);
-    LanAvatarQuality.Install(harmony,Game.GetType("FFSNet.NetworkPlayer",true));
-    LanUi.Install(harmony);LanText.Install(harmony);DiagnosticTrace.Write("Harmony installation complete; waiting for game-thread network initialization");
-   } catch(Exception e){Session.Report("INSTALL ERROR "+e);if(harmony!=null){harmony.UnpatchAll(harmony.Id);harmony=null;}}
+    LanChannels.Install(harmony,join);
+    LanAvatarQuality.Install(harmony,avatar);
+    LanUi.Install(harmony);LanText.Install(harmony);
+    // Install the pump last so a failed compatibility check cannot switch the
+    // backend on the game thread while a partial patch set is being rolled back.
+    harmony.Patch(pump,postfix:new HarmonyMethod(typeof(Payload),"Pump"));
+    DiagnosticTrace.Write("Harmony installation complete; waiting for game-thread network initialization");
+    patchesReady=true;
+   } catch(Exception e){
+    patchesReady=false;pendingSwitch=false;Session.Report("INSTALL ERROR "+e);
+    if(harmony!=null){try{harmony.UnpatchAll(harmony.Id);}catch(Exception rollback){DiagnosticTrace.Write("Patch rollback failed: "+rollback);}harmony=null;}
+   }
   }
-  public static IEnumerable<CodeInstruction> SwapConstructor(IEnumerable<CodeInstruction> code) {
-   int count=0;
-   foreach(var i in code){var c=i.operand as ConstructorInfo;
-    if(i.opcode==OpCodes.Newobj && c!=null && c.DeclaringType==Eos) {
-     i.operand=Enet.GetConstructor(c.GetParameters().Select(p=>p.ParameterType).ToArray());count++;
-    } yield return i;
-   } if(count!=1)throw new Exception("Expected exactly one EOS constructor, found "+count);
+  public static IEnumerable<CodeInstruction> SwapConstructor(IEnumerable<CodeInstruction> code,ILGenerator generator) {
+   return PatchDiscovery.SwapBackend(code,Eos,Enet,Backend,AccessTools.Method(typeof(Payload),"CanUseLanBackend"),generator);
   }
   public static void InputPatch(object __instance){
    var f=AccessTools.Field(__instance.GetType(),"inviteCodeInput");
@@ -59,6 +86,7 @@ namespace FrosthavenLan {
   }
   static void SetInput(object input,string name,string value){var prop=input.GetType().GetProperty(name);prop.SetValue(input,Enum.Parse(prop.PropertyType,value),null);}
   public static void Pump(){
+   if(!patchesReady)return;
    if(++frame%15!=0)return;
    try {
     if(pendingSwitch && Backend.GetValue(null)!=null && Prop("CurrentUserToken")!=null){
@@ -97,7 +125,7 @@ namespace FrosthavenLan {
      originalBackend=eos;
     }
     if(originalBackend!=null){((IDisposable)current).Dispose();Backend.SetValue(null,originalBackend);}
-    LanUi.SetEnabled(false);harmony.UnpatchAll(harmony.Id);LanText.Refresh();Session.Report("RESTORED; input settings revert on process exit");return;
+    patchesReady=false;LanUi.SetEnabled(false);harmony.UnpatchAll(harmony.Id);LanText.Refresh();Session.Report("RESTORED; input settings revert on process exit");return;
    }
    throw new Exception("Unknown command");
   }

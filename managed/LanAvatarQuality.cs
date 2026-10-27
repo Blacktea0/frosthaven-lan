@@ -9,12 +9,15 @@ namespace FrosthavenLan {
  public static class LanAvatarQuality {
   const BindingFlags All=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static;
   public static void Install(Harmony harmony,Type player){
-   var iterator=player.GetNestedTypes(All).Single(t=>t.Name.StartsWith("<StartLoadingAvatarCrt>"));
-   harmony.Patch(AccessTools.Method(iterator,"MoveNext"),transpiler:new HarmonyMethod(typeof(LanAvatarQuality),"PreservePixels"));
+   Install(harmony,PatchDiscovery.Avatar(player));
+  }
+  public static void Install(Harmony harmony,MethodInfo method){
+   harmony.Patch(method,transpiler:new HarmonyMethod(typeof(LanAvatarQuality),"PreservePixels"));
   }
   static bool Calls(CodeInstruction i,string type,string name){var m=i.operand as MethodInfo;return m!=null&&m.DeclaringType.FullName==type&&m.Name==name;}
   public static IEnumerable<CodeInstruction> PreservePixels(IEnumerable<CodeInstruction> instructions,MethodBase __originalMethod){
    var code=instructions.ToList();
+   PatchDiscovery.ValidateAvatar(code,__originalMethod);
    var targets=code.Select((i,n)=>new {i,n}).Where(x=>Calls(x.i,"UnityEngine.RenderTexture","GetTemporary")).ToArray();
    if(targets.Length!=1)throw new Exception("Expected one avatar RenderTexture allocation");
    int start=targets[0].n-3;
@@ -22,8 +25,7 @@ namespace FrosthavenLan {
    if(start<0||end<0||code[start].opcode!=OpCodes.Ldc_I4||!Equals(code[start].operand,128)||code[start+1].opcode!=OpCodes.Ldc_I4||!Equals(code[start+1].operand,128)||code[start+2].opcode!=OpCodes.Ldc_I4_0)throw new Exception("Unsupported avatar resize block");
    var block=code.GetRange(start,end-start+1);
    if(block.Count(i=>Calls(i,"UnityEngine.Graphics","Blit"))!=1||block.Any(i=>i.blocks.Count!=0))throw new Exception("Unsupported avatar GPU copy flow");
-   var owner=__originalMethod.DeclaringType.GetField("<>4__this",All);
-   if(owner==null)throw new MissingFieldException(__originalMethod.DeclaringType.FullName,"<>4__this");
+   var owner=PatchDiscovery.AvatarOwner(__originalMethod);
    var replacement=new CodeInstruction(OpCodes.Ldarg_0);
    replacement.labels.AddRange(block.SelectMany(i=>i.labels));
    code.RemoveRange(start,block.Count);

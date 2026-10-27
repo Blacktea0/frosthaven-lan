@@ -9,23 +9,27 @@
 ## 架构与注入流程
 
 1. Rust 启动器从 Steam 注册表、Steam 进程路径、`libraryfolders.vdf` 与 `appmanifest_2347080.acf` 发现安装位置，支持多个库与自定义路径。
-2. 校验目标进程属于登记安装，并检查游戏程序集哈希；不支持的版本拒绝注入。
-3. 向游戏加载原生 `LanBridge.dll`，等待 Mono 根域就绪，再将工作线程附加到运行时。
+2. 校验目标进程属于登记安装，记录游戏程序集 SHA256，并在启动及注入前检查文件未发生变化；不使用固定哈希白名单。
+3. 向游戏加载原生 `LanBridge.dll`，等待 Mono 根域和托管主线程对象出现，再将工作线程附加到运行时。
 4. 桥接调用 `Bootstrap.dll`，由它解析运行包内依赖并加载 `LanPayload.dll`。
 5. 托管补丁等待 `Assembly-CSharp` 和 `UnityEngine.CoreModule` 加载，再安装 Harmony 补丁。Mono DLL 已出现不代表这些程序集已经就绪；等待用于避免冷启动注入竞争条件。
 6. 在游戏主线程上切换后端、刷新文案与输入框，确认 LAN 后端就绪后报告成功。活动联机会话中拒绝切换。
 
-原生桥接等待根域最多 120 秒，托管层等待必需程序集最多 120 秒；启动器注入后的就绪等待为 150 秒。失败或超时通过内存状态通信反馈到控制台，不应将 DLL 已加载视为 LAN 已就绪。
+原生桥接等待根域和主线程对象最多 120 秒，托管层等待必需程序集最多 120 秒；启动器注入后的就绪等待为 150 秒。失败或超时通过内存状态通信反馈到控制台，不应将 DLL 已加载视为 LAN 已就绪。
 
 ## 兼容性校验
 
-当前支持 **Retail 1.0.34121 Steam**。`Assembly-CSharp.dll` SHA256：
+原支持基线为 **Retail 1.0.34121 Steam**，其 `Assembly-CSharp.dll` SHA256（仅作历史指纹）：
 
 ```text
 20e5c317378426b0b3bf2833e4f54ed34677e062dafcaeecedd1b09340a606c5
 ```
 
-更换安装目录无需改代码。更换游戏版本需要重新分析、验证接口与补丁位置，再更新支持信息，不能只替换哈希。
+更新版本通过运行时结构探测兼容：在 `FFSNetwork` 及其嵌套类型内寻找唯一的 EOS 构造调用，并要求下一条有效指令写入静态 `_backend` 字段；ENet 必须提供参数类型完全一致的构造函数。ENet 连接点按 `ENet.Host.Connect(Address)` 调用定位，头像协程按 GPU 复制流程和唯一的玩家引用字段定位。所有候选必须唯一，关键签名和原有 IL 防护必须通过；安装主线程 Pump 前完成其他补丁，失败时撤销本工具的补丁。
+
+不依赖元数据 token、协程编号或上述方法名称，但后端类型名、网络属性和界面接口仍必须兼容。不扫描任意程序集来猜测替代接口，不自动放宽协议或头像复制的结构要求。SHA256 只用于诊断和防止启动期间文件变化，不能证明新版本的协议或联机行为兼容。
+
+2026-10-28 对更新后程序集进行了只读元数据/IL 检查，SHA256 为 `c16c02d74985fafdf5c02ab0c5d33ca5c5cf646be4b064474f8f40989e4ff13c`；后端构造与字段赋值、ENet 连接、头像复制和现有 UI 入口结构仍符合探测条件。未启动或注入游戏，未验证该版本的实际启动或多人联机。
 
 ## 按权限选择启动方式
 
@@ -81,7 +85,7 @@ cargo xtask command restore
 ```
 
 - `start` 检查游戏已关闭，按当前权限启动游戏、等待运行时、注入并确认后端就绪。
-- `locate` 显示 Steam 中的安装目录；`verify` 校验游戏程序集。
+- `locate` 显示 Steam 中的安装目录；`verify` 输出游戏程序集指纹，补丁结构兼容性在启动后检查。
 - `status` 查询当前后端与会话状态；`steam-status` 查询 Steam 身份状态。
 - `restore` 需先结束多人会话，然后恢复原网络后端、撤销方法补丁并刷新界面。DLL 和输入框实例配置在游戏退出后完全释放。
 
@@ -152,7 +156,9 @@ LAN 后端启用后，在主菜单 `VersionAndChangeLog.VersionText` 的原有�
 
 ## English design summary
 
-The Rust launcher discovers Steam installations and verifies both the process path and the supported game assembly hash. It injects `LanBridge.dll`, waits for the Mono root domain, and invokes `Bootstrap.dll`. The bootstrap resolves packaged dependencies and loads the managed payload. The payload waits for `Assembly-CSharp` and `UnityEngine.CoreModule` before installing Harmony patches, then switches the backend and refreshes UI on the game thread. An active network session prevents switching.
+The Rust launcher discovers Steam installations, verifies the process path, and records the assembly fingerprint, checking that it remains unchanged during startup rather than enforcing a fixed hash allowlist. It injects `LanBridge.dll`, waits for both the Mono root domain and managed main thread object, and invokes `Bootstrap.dll`. The payload waits for the game and Unity assemblies, then discovers unique backend initialization, ENet connection and avatar copy methods from their IL structure. Exact constructor signatures, backend properties and existing IL guards remain mandatory; incompatible or ambiguous structures stop installation. Other patches are installed before the game-thread pump, with rollback on failure. Backend type names and UI interfaces must still be compatible; structural checks cannot prove network protocol compatibility. An active network session prevents switching.
+
+On 2026-10-28, read-only metadata/IL inspection of the updated assembly (`c16c02d74985fafdf5c02ab0c5d33ca5c5cf646be4b064474f8f40989e4ff13c`) found compatible backend construction/assignment, ENet connection, avatar copy and existing UI entry structures. This was not a real-game startup, injection or multiplayer test. The old hash above is a historical baseline, not an allowlist entry. The `verify` command prints a fingerprint; patch compatibility is checked during startup.
 
 One `asInvoker` launcher preserves caller permissions and queries the effective process token for elevation. Standard permissions launch the game EXE directly with `SteamAppId`; administrator permissions request startup through Steam immediately. Neither path waits for Enter. Use administrator mode if you need the Steam in-game overlay. Close the game first, then right-click the launcher and select Run as administrator to let the tool launch it through Steam. Game-side Steam authentication still applies. A Steam startup request times out after three minutes. Existing game processes are rejected: close all instances manually, then reopen the tool. PID selection and direct injection commands have been removed. Standard mode targets only its newly created child; Steam mode waits for a new process after its own startup request and rejects multiple instances. After updates or restore, close the game and reopen the tool.
 
@@ -162,7 +168,7 @@ Advanced commands include `start`, `locate`, `verify`, and `command <status|stea
 
 ENet uses UDP 30000 and the client's invite-code field becomes a host-IPv4 field. Other computers must use the actual host IP rather than the host UI's `localhost`. All analyzed invite-code labels, copy/use buttons, join descriptions, tooltips, hosting help, and invalid-code messages use host-IP wording in all 12 supported languages without modifying language files. The main-menu version label gains a single `LAN Enabled` suffix only while the LAN patch is enabled; existing menus, newly created menus, language changes, and restore are handled without changing the real game version. Patches affect memory only; normal game configuration and save writes continue.
 
-Version tags matching `Cargo.toml` trigger Windows CI formatting checks, Rust tests, managed readiness regression tests, production packaging, and Release publication. Both README warnings are repeated in release notes. Live injection and multiplayer testing remain separate from automated build verification. See the tables and commands above for the supported hash, runtime files, console behavior, and source layout.
+Version tags matching `Cargo.toml` trigger Windows CI formatting checks, Rust tests, managed readiness regression tests, production packaging, and Release publication. Both README warnings are repeated in release notes. Live injection and multiplayer testing remain separate from automated build verification. See the sections above for compatibility checks, runtime files, console behavior, and source layout.
 
 Console language follows the Windows user locale: Chinese locales use simplified Chinese, other locales fall back to English, and unavailable locale detection defaults to simplified Chinese. The five startup stages use animated spinners in a terminal and one static line each when redirected. Successful startup waits ten seconds and exits; every invocation waits for Enter after failure. Startup status and correlated command responses travel through shared memory, not files. The game continues running after launcher exit.
 

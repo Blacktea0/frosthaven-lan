@@ -8,7 +8,7 @@
 
 ## Introduction
 
-A Windows x64 LAN tool for Frosthaven. It enables the built-in ENet backend through in-memory injection without modifying installed game files. Currently supports **Retail 1.0.34121 Steam**.
+A Windows x64 LAN tool for Frosthaven. It enables the built-in ENet backend through in-memory injection without modifying installed game files. The original support baseline is **Retail 1.0.34121 Steam**; updated versions undergo runtime structural checks instead of a fixed DLL hash allowlist. Passing these checks does not mean that a version has undergone real-game or multiplayer validation.
 
 When enabled, the main menu version label ends with `LAN Enabled`, and invite-code UI text uses the host IP instead.
 
@@ -33,6 +33,8 @@ Standard mode checks the current local Steam login session before starting the g
 Allow **UDP 30000** across the network. Other computers must use the host's actual IP rather than the `localhost` shown in the host UI. Steam identity initialization is still required; fully offline startup is unsupported.
 
 During startup, the native bridge waits for both the Mono root domain and managed main thread object before attaching the injection thread, avoiding early attachment based only on the Mono DLL or root domain. The wait is limited to 120 seconds; if the game exits during initialization, console diagnostics retain its process exit code in decimal and hexadecimal. Simulated startup timing tests cover this wait logic; its effect on actual cold starts still requires real-game validation.
+
+The tool discovers patch methods from EOS backend construction and field assignment, ENet connection calls, and the avatar GPU copy flow, without relying on metadata tokens, coroutine indices, or those method names. Critical signatures and IL structure must match with exactly one candidate; otherwise patch installation stops with full diagnostics. This accommodates updates that retain these structures; substantial changes to backend types, UI interfaces, network protocols, or copy flow may still require a tool update. SHA256 is retained for diagnostics and detecting file changes during startup, and does not prove protocol compatibility.
 
 Startup stages use an animated spinner. Console language follows the Windows locale: Chinese locales use simplified Chinese, all other locales use English, and failed locale detection defaults to simplified Chinese. On success, the tool exits after ten seconds while the game keeps running. On failure, the console displays the full original error, inner exceptions, stack traces, Windows error codes, and timestamped diagnostic history. Every invocation waits for Enter after failure instead of closing automatically. The tool does not generate log files. After updating the patch, close the game and reopen the tool.
 

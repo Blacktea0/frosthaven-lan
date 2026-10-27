@@ -5,7 +5,6 @@ mod launcher;
 mod trace;
 mod ui;
 mod win;
-use config::HASH;
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
@@ -70,26 +69,27 @@ fn root() -> Result<PathBuf> {
         .to_path_buf())
 }
 fn verify() -> Result<String> {
-    verify_game(&discovery::locate()?)
+    fingerprint_game(&discovery::locate()?)
 }
-fn verify_game(game: &Path) -> Result<String> {
+fn fingerprint_game(game: &Path) -> Result<String> {
     let assembly = game.join(r"Frosthaven_Data\Managed\Assembly-CSharp.dll");
-    let hash = format!("{:x}", Sha256::digest(fs::read(&assembly)?));
-    if hash != HASH {
+    Ok(format!("{:x}", Sha256::digest(fs::read(&assembly)?)))
+}
+fn require_unchanged_game(expected: &str, actual: &str) -> Result<()> {
+    if actual != expected {
         return Err(format!(
-            "Unsupported game assembly SHA256\nAssembly: {}\nExpected: {HASH}\nActual: {hash}",
-            assembly.display()
+            "Game assembly changed during startup; close the game and reopen this tool.\nExpected SHA256: {expected}\nActual SHA256: {actual}"
         )
         .into());
     }
-    Ok(hash)
+    Ok(())
 }
-unsafe fn inject(pid: u32, diagnostics: &trace::Diagnostics) -> Result<()> {
+unsafe fn inject(pid: u32, expected_hash: &str, diagnostics: &trace::Diagnostics) -> Result<()> {
     diagnostics.record(format!(
         "Injecting into PID {pid}: validating installation and assembly hash"
     ));
     let game = discovery::for_process(pid)?;
-    verify_game(&game)?;
+    require_unchanged_game(expected_hash, &fingerprint_game(&game)?)?;
     diagnostics.record(format!("OpenProcess PID={pid}, access=0x43a"));
     let h = OpenProcess(0x43a, 0, pid);
     if h.is_null() {
@@ -271,6 +271,7 @@ fn main() {
             Some("command") => command(&dir, &args[2..].join(" "), &mut diagnostics),
             Some("verify") => {
                 println!("{}", verify()?);
+                ui::line(ui::text("以上为程序集指纹；补丁兼容性将在启动时按代码结构检查。", "Assembly fingerprint only; patch compatibility is checked structurally during startup."));
                 Ok(())
             }
             Some("locate") => { println!("{}", discovery::locate()?.display()); Ok(()) }

@@ -45,7 +45,7 @@ class FakeAvatarPlayer {
  public UnityEngine.Sprite Avatar{get;set;}
  bool _isAvatarCreatedFromStream;
  public bool OwnsCopy{get{return _isAvatarCreatedFromStream;}}
- public IEnumerator StartLoadingAvatarCrt(){
+ public IEnumerator RenamedAvatarCoroutine(){
   yield return null;
   if(Avatar!=null){
    var rt=UnityEngine.RenderTexture.GetTemporary(128,128,0);
@@ -57,7 +57,7 @@ class FakeAvatarPlayer {
 }
 class LanAvatarQualityTests {
  static void Require(bool value,string message){if(!value)throw new Exception(message);Console.WriteLine("PASS: "+message);}
- static void Run(FakeAvatarPlayer player){var routine=player.StartLoadingAvatarCrt();while(routine.MoveNext()){} }
+ static void Run(FakeAvatarPlayer player){var routine=player.RenamedAvatarCoroutine();while(routine.MoveNext()){} }
  static int Main(){try{
   var source=new UnityEngine.Texture2D(184,184,UnityEngine.TextureFormat.RGBA32,true);source.activeMipmapLimit=3;
   var pixels=new UnityEngine.Color32[184*184];for(int i=0;i<pixels.Length;i++)pixels[i]=new UnityEngine.Color32{r=(byte)i,g=(byte)(i>>8),b=(byte)(i*7),a=(byte)(255-i%19)};

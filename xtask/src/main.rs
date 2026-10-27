@@ -38,7 +38,7 @@ fn build(root: &Path) -> Result<()> {
         return Err(format!("C# compiler not found: {}", csc.display()).into());
     }
     let dist = root.join("dist");
-    println!("Supported game assembly SHA256: {}", config::HASH);
+    println!("Game compatibility: runtime structural discovery; no fixed hash allowlist");
     fs::create_dir_all(&dist)?;
     for (source, name) in [
         ("README.md", "README.md"),
@@ -71,6 +71,7 @@ fn build(root: &Path) -> Result<()> {
                 "managed/LanCopy.cs",
                 "managed/LanUi.cs",
                 "managed/RuntimeAssemblies.cs",
+                "managed/PatchDiscovery.cs",
             ],
         ),
     ] {
@@ -120,6 +121,7 @@ fn test_managed(root: &Path) -> Result<()> {
     )?;
     for (test, source) in [
         ("RuntimeAssembliesTests", "RuntimeAssemblies"),
+        ("PatchDiscoveryTests", "PatchDiscovery"),
         ("SessionTests", "Session"),
         ("LanCopyTests", "LanCopy"),
         ("LanUiTests", "LanUi"),
@@ -141,8 +143,14 @@ fn test_managed(root: &Path) -> Result<()> {
                 .arg(root.join(r"managed\LanCopy.cs"))
                 .arg(format!("/r:{}", root.join("target/0Harmony.dll").display()));
         }
-        if test == "LanChannelsTests" || test == "LanAvatarQualityTests" {
+        if test == "LanChannelsTests"
+            || test == "LanAvatarQualityTests"
+            || test == "PatchDiscoveryTests"
+        {
             compiler.arg(format!("/r:{}", root.join("target/0Harmony.dll").display()));
+        }
+        if test == "LanChannelsTests" || test == "LanAvatarQualityTests" {
+            compiler.arg(root.join(r"managed\PatchDiscovery.cs"));
         }
         run(compiler)?;
         let mut test = Command::new(output);

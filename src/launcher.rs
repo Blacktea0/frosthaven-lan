@@ -1,6 +1,6 @@
 use super::config::APP_ID;
 use super::{
-    discovery, inject, ipc, modules, trace, ui, verify_game,
+    discovery, fingerprint_game, inject, ipc, modules, require_unchanged_game, trace, ui,
     win::{game_pids, is_elevated, open_steam_game},
     Owned, Result,
 };
@@ -171,8 +171,8 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
     diagnostics.record("Locating Steam-registered Frosthaven installation");
     let game = discovery::locate()?;
     diagnostics.record(format!("Located game directory: {}", game.display()));
-    let hash = verify_game(&game)?;
-    diagnostics.record(format!("Game assembly SHA256 verified: {hash}"));
+    let initial_hash = fingerprint_game(&game)?;
+    diagnostics.record(format!("Game assembly SHA256: {initial_hash}; compatibility will be checked by managed structural discovery"));
     drop(mode_progress);
     ui::line(format!(
         "{}{}",
@@ -205,9 +205,11 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
         actual_game.display()
     ));
     diagnostics.record("Rechecking detected game's assembly SHA256");
-    let hash = verify_game(&actual_game)
-        .map_err(|error| trace::context("Verifying detected game's assembly failed", error))?;
-    diagnostics.record(format!("Detected game assembly SHA256 verified: {hash}"));
+    let hash = fingerprint_game(&actual_game).map_err(|error| {
+        trace::context("Reading detected game's assembly fingerprint failed", error)
+    })?;
+    require_unchanged_game(&initial_hash, &hash)?;
+    diagnostics.record(format!("Detected game assembly SHA256 unchanged: {hash}"));
     let progress = ui::Progress::new(format!(
         "{}{}{}",
         ui::text("检测到游戏进程 (PID:", "Game process detected (PID: "),
@@ -255,7 +257,7 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
         thread::sleep(Duration::from_millis(250));
     }
     unsafe {
-        if let Err(error) = inject(pid, diagnostics) {
+        if let Err(error) = inject(pid, &initial_hash, diagnostics) {
             // Preserve the original injection error even if the game died in
             // an API call; append process state to the diagnostic history.
             if let Err(exit) = process.require_running("Game exited during injection", diagnostics)
@@ -315,6 +317,17 @@ pub fn start(dir: &Path, diagnostics: &mut trace::Diagnostics) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn game_updates_are_accepted_but_changes_during_startup_are_refused() {
+        let old = "20e5c317378426b0b3bf2833e4f54ed34677e062dafcaeecedd1b09340a606c5";
+        let updated = "c16c02d74985fafdf5c02ab0c5d33ca5c5cf646be4b064474f8f40989e4ff13c";
+        assert!(require_unchanged_game(old, old).is_ok());
+        assert!(require_unchanged_game(updated, updated).is_ok());
+        let error = require_unchanged_game(old, updated)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(old) && error.contains(updated));
+    }
     #[test]
     fn process_monitor_retains_exit_code_after_process_disappears() {
         // Use a harmless child shell, never the game or injection path.

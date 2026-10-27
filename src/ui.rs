@@ -120,7 +120,7 @@ pub fn diagnostic(message: &str) -> String {
         _ if message.contains("Steam login could not be confirmed.") => "无法确认 Steam 已登录。请先打开 Steam 并完成登录，再重新打开本工具；也可右键以管理员身份运行，通过 Steam 启动游戏。",
         "Direct game startup timed out" => "游戏启动超时，请关闭游戏后重新打开本工具。",
         "Target game exited" | "Game exited after injection" => "游戏已退出，请重新打开本工具。",
-        _ if message.starts_with("Unsupported game assembly SHA256") => "游戏版本不受支持，请使用 README 中列出的游戏版本。",
+        _ if message.starts_with("Game assembly changed during startup") => "游戏文件在启动期间发生变化，请关闭游戏，等待更新完成后重新打开本工具。",
         "Timed out waiting for the game Mono runtime to initialize." => "等待游戏运行时初始化超时，请关闭游戏后重新打开本工具。",
         "DLL did not load" => "网络组件加载失败，请关闭游戏后重新打开本工具。",
         "LoadLibrary timeout; remote buffer retained" => "网络组件加载超时，请关闭游戏后重新打开本工具。",
