@@ -54,7 +54,7 @@ namespace FrosthavenLan {
     // Validate the actual Harmony instruction stream before changing any method.
     ILGenerator initGenerator;var initCode=PatchProcessor.GetOriginalInstructions(init,out initGenerator);
     SwapConstructor(initCode,initGenerator).ToArray();
-    LanChannels.ConnectWithAvatarChannel(PatchProcessor.GetOriginalInstructions(join)).ToArray();
+    PatchDiscovery.ConnectReplacement(PatchProcessor.GetOriginalInstructions(join));
     LanAvatarQuality.PreservePixels(PatchProcessor.GetOriginalInstructions(avatar),avatar).ToArray();
     Type sync=Unity("UnityEngine.Object").Assembly.GetType("UnityEngine.UnitySynchronizationContext",true);
     var pump=AccessTools.Method(sync,"Exec",Type.EmptyTypes);

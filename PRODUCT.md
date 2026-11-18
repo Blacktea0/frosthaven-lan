@@ -30,7 +30,7 @@ The original support baseline was **Retail 1.0.34121 Steam**, with this historic
 Updated versions undergo runtime structural discovery:
 
 - Search `FFSNetwork` and its nested types for exactly one EOS constructor call. The next non-NOP instruction must store the result in the compatible static `_backend` field. ENet must expose a constructor with exactly the same parameter types; reflection binder conversions are not accepted.
-- Find the ENet connection method through its `ENet.Host.Connect(Address)` call and validate the two-argument channel-count overload.
+- Find the unique ENet connection method through its `ENet.Host.Connect` call. Patch the legacy `Connect(Address)` call to request two channels after validating the overload. Preserve the game's `Connect(Address, int)` call when the IL explicitly requests three channels for Main, PlayerAvatar, and Bulk.
 - Find the avatar coroutine through its GPU copy flow and exactly one field referencing the owning player. Retain the existing resize, copy-flow, and exception-boundary guards.
 
 Each target must be unique and pass its signature and IL checks. Discovery does not depend on metadata tokens, coroutine indices, or these method names. Backend type names, network properties, and UI interfaces must still be compatible. The tool does not search arbitrary assemblies for approximate replacements or relax protocol and avatar-copy requirements.
@@ -74,7 +74,7 @@ LanPayload.dll
 0Harmony.dll
 ```
 
-Release ZIPs also contain the English `README.md`, simplified Chinese `README.zh-CN.md`, and `Harmony-LICENSE.txt`. `PRODUCT.md` and `AGENTS.md` stay in the repository. README links to this document use its repository URL so they work from an extracted ZIP.
+Release ZIPs contain these five runtime files and `Harmony-LICENSE.txt`. Both READMEs and their screenshots are available in the repository.
 
 Rust handles launching, injection, the Mono bridge, and build tasks. C# resolves game types through runtime reflection, so builds do not require installed game assemblies. Official CI builds use Windows x64 MSVC. Local builds support the configured MSVC or GNU toolchain and statically link the native C runtime. MSVC requires Visual Studio C++ Build Tools and Windows SDK link libraries, including `kernel32.lib`. GNU requires GCC and `windres` on PATH. Close the game before rebuilding loaded DLLs. End users do not need Rust.
 
@@ -123,7 +123,7 @@ The tool writes no runtime log or command files, including `launcher-error.log`,
 
 ## Network, avatars, and localized UI
 
-ENet uses **UDP 30000**. Clients enter the host's IPv4 address without a port in place of an invite code. The host UI still displays `localhost`; other computers must use the host's actual IP. Steam identity initialization remains required; fully offline startup is unsupported.
+ENet uses **UDP 30000**. The host's multiplayer notification prompts them to share their LAN IPv4 address with friends. Clients enter the address without a port. Steam identity initialization remains required for startup.
 
 LAN connections negotiate both game-message and avatar channels. Avatar synchronization uses the game's existing mechanism and still requires each local Steam client to retrieve its player's avatar. The patch copies the Steam texture's original CPU pixels at their source dimensions, bypassing the fixed 128×128 GPU resize. Network avatar copies disable mipmaps without changing global texture quality. Copies have independent lifetimes and use the game's cleanup ownership.
 
@@ -134,7 +134,8 @@ Localized patches replace all analyzed invite-code text in memory without editin
 | UI area | LAN wording or behavior |
 | --- | --- |
 | Join input and invite-code heading | Host IP |
-| Copy button | Copy host IP, preserving keyboard/controller glyphs |
+| Host invite-code control and text | Hidden in LAN sessions |
+| Host session-start notification | Share the host IP with friends so they can join |
 | Generate-invite entry | Use host IP |
 | Old and new join descriptions | Obtain the host IPv4 and enter it without a port |
 | Main-menu multiplayer tooltip | Join a multiplayer LAN game using the host IP |
@@ -147,6 +148,10 @@ Supported game languages are English, German, French, Italian, Spanish, Brazilia
 ## Validation and release automation
 
 `cargo xtask test-managed` covers delayed/already-loaded assemblies and timeouts; structural discovery, renamed methods and owner fields, incompatible/ambiguous candidates, constructor activation and rollback; native/managed Unicode readiness and correlated IPC; localized invite-code coverage; version-label refresh, language changes, and restore; ENet channel negotiation; and avatar pixel preservation. Rust tests cover launcher checks, Mono wait behavior, diagnostics, process monitoring, and memory IPC. Automated verification does not start or inject into the game. Real-game startup and multiplayer validation are separate.
+
+Manual validation on Retail 1.0.34574 Steam (build `26755354`) used two instances launched by an isolated harness, one Steam account, and `127.0.0.1`. Hosting, joining, character assignment, battle goals, opening narration, battlefield loading, first-round card selection and initiative, a movement action, and disconnect notification were checked. Both peers reported matching 184×184 avatar PNGs with one mip. The first attempt disconnected when starting a new campaign's opening scene. Replaying from the pre-battle save reached the battlefield on both peers, and joining an already loaded battlefield also worked. The cause of the first disconnect remains undetermined. This check covered one machine and part of the first combat round.
+
+A separate UI check on the same build used the production launcher. Both English and simplified Chinese Join Game dialogs accepted the full example IPv4 address `10.24.8.16`.
 
 Version tags matching `Cargo.toml` trigger Windows CI formatting checks, Rust and managed tests, production ZIP construction and verification, and failure-diagnostic checks before publishing ZIP and SHA256 assets. Release notes repeat the antivirus warnings from both READMEs and include required version-specific changes. Contributor rules and the release procedure are maintained in [AGENTS.md](AGENTS.md).
 

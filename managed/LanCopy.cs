@@ -16,12 +16,28 @@ namespace FrosthavenLan {
    {"ja",new[]{"ホストのIPアドレスを入力","LANでマルチプレイのゲームを作成しますか？","ホストIP","ホストIPをコピー","ホストIPを使用","ホストのIPv4アドレスを確認し、ポート番号を付けずに下の欄に入力して、LANゲームへの参加を確定してください。","キャンペーンを読み込み、ポーズメニューのマルチプレイからゲームを作成します。ホストのIPv4アドレスを共有し、参加したプレイヤーにキャラクターを割り当てて確定します。ワールドマップまたはカード選択中に参加できます。","ホストのIPアドレスを使ってLANゲームに参加します。","ホストIPが無効です"}},
    {"ko",new[]{"호스트 IP 입력","LAN 멀티플레이어 게임을 호스팅하시겠습니까?","호스트 IP","호스트 IP 복사","호스트 IP 사용","호스트의 IPv4 주소를 받아 포트 번호 없이 아래에 입력하고 확인하여 LAN 게임에 참여하세요.","캠페인을 불러오고 일시 정지 메뉴에서 멀티플레이어를 선택하여 게임을 만드세요. 호스트의 IPv4 주소를 공유하고 참여한 플레이어에게 캐릭터를 배정한 뒤 확인하세요. 세계 지도 또는 카드 선택 단계에서 참여할 수 있습니다.","호스트 IP 주소로 LAN 게임에 참여합니다.","잘못된 호스트 IP"}},
   };
+  const int MultiplayerStarted=9;
+  static readonly Dictionary<string,string> HostNotifications=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase){
+   {"en","Share the host IP with friends so they can join."},
+   {"de","Teile die Host-IP mit Freunden, damit sie beitreten können."},
+   {"fr","Partagez l’IP de l’hôte avec vos amis pour qu’ils vous rejoignent."},
+   {"it","Condividi l’IP dell’host con gli amici per farli unire."},
+   {"es","Comparte la IP del anfitrión con tus amigos para que se unan."},
+   {"pt","Compartilhe o IP do anfitrião com seus amigos para que entrem."},
+   {"hu","Oszd meg a házigazda IP-címét a barátaiddal, hogy csatlakozhassanak."},
+   {"ru","Отправьте друзьям IP хоста, чтобы они могли подключиться."},
+   {"zh-CN","将主机IP发给好友以邀请好友加入"},
+   {"zh-TW","將主機IP傳給好友以邀請好友加入"},
+   {"ja","フレンドにホストのIPアドレスを共有し、参加してもらいましょう。"},
+   {"ko","친구가 참가할 수 있도록 호스트 IP를 공유하세요."},
+  };
   public static string DecorateVersion(string text){return String.IsNullOrEmpty(text)||text.EndsWith(VersionSuffix,StringComparison.Ordinal)?text:text+VersionSuffix;}
-  static string[] Resolve(string code){
-   code=code??"en";string[] row;
-   if(Text.TryGetValue(code,out row))return row;
-   if(code.StartsWith("zh",StringComparison.OrdinalIgnoreCase))return Text[code.IndexOf("Hant",StringComparison.OrdinalIgnoreCase)>=0||code.EndsWith("HK",StringComparison.OrdinalIgnoreCase)||code.EndsWith("MO",StringComparison.OrdinalIgnoreCase)||code.EndsWith("CHT",StringComparison.OrdinalIgnoreCase)?"zh-TW":"zh-CN"];
-   return Text.TryGetValue(code.Split('-')[0],out row)?row:Text["en"];
+  static string ResolveLanguage(string code){
+   code=code??"en";
+   if(Text.ContainsKey(code))return code;
+   if(code.StartsWith("zh",StringComparison.OrdinalIgnoreCase))return code.IndexOf("Hant",StringComparison.OrdinalIgnoreCase)>=0||code.EndsWith("HK",StringComparison.OrdinalIgnoreCase)||code.EndsWith("MO",StringComparison.OrdinalIgnoreCase)||code.EndsWith("CHT",StringComparison.OrdinalIgnoreCase)?"zh-TW":"zh-CN";
+   string language=code.Split('-')[0];
+   return Text.ContainsKey(language)?language:"en";
   }
   public static int Index(string key){
    if(key==null)return -1;key=key.Substring(key.LastIndexOf('/')+1);
@@ -35,14 +51,16 @@ namespace FrosthavenLan {
     case "GUI_MAIN_MENU_MULTIPLAYER_HOW_TO_HOST_DESCR":return 6;
     case "GUI_MAIN_MENU_MULTIPLAYER_TOOLTIP":return 7;
     case "GUI_MULTIPLAYER_CONNECTION_FAILED_InvalidCode":return 8;
+    case "GUI_NOTIFICATION_MULTIPLAYER_STARTED":return MultiplayerStarted;
     default:return -1;
    }
   }
   public static bool TryTranslate(string key,string original,string code,out string translation){
    int index=Index(key);translation=original;if(index<0)return false;
-   translation=Resolve(code)[index];
+   string language=ResolveLanguage(code);
+   translation=index==MultiplayerStarted?HostNotifications[language]:Text[language][index];
    if(index==3&&!String.IsNullOrEmpty(original))translation=Regex.Match(original,@"^(?:\s*<[^>]+>)*\s*").Value+translation;
-   if(index==7&&!String.IsNullOrEmpty(original)){int newline=original.IndexOf('\n');if(newline>=0)translation=original.Substring(0,newline+1)+translation;}
+   if((index==7||index==MultiplayerStarted)&&!String.IsNullOrEmpty(original)){int newline=original.IndexOf('\n');if(newline>=0)translation=original.Substring(0,newline+1)+translation;}
    return true;
   }
  }

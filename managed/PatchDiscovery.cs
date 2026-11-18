@@ -91,15 +91,27 @@ namespace FrosthavenLan {
   }
   public static MethodInfo Connect(Type enet){
    var target=Unique("ENet connection",Methods(enet).Where(m=>Read(m).Any(i=>Calls(i,"ENet.Host","Connect"))));
-   ValidateConnect(Read(target));return target;
+   ConnectReplacement(Read(target));return target;
   }
-  public static void ValidateConnect(IList<CodeInstruction> code){
-   var calls=code.Where(i=>Calls(i,"ENet.Host","Connect")).ToArray();
+  public static MethodInfo ConnectReplacement(IList<CodeInstruction> code){
+   var calls=code.Select((instruction,index)=>new {instruction,index}).Where(call=>Calls(call.instruction,"ENet.Host","Connect")).ToArray();
    if(calls.Length!=1)throw new NotSupportedException("Expected exactly one ENet Connect call, found "+calls.Length);
-   var method=(MethodInfo)calls[0].operand;var parameters=method.GetParameters();
-   if(method.IsStatic||parameters.Length!=1||parameters[0].ParameterType.FullName!="ENet.Address")throw new NotSupportedException("Unsupported ENet Connect signature");
+   var callSite=calls[0];
+   var method=(MethodInfo)callSite.instruction.operand;var parameters=method.GetParameters();
+   if(method.IsStatic||parameters.Length==0||parameters[0].ParameterType.FullName!="ENet.Address")throw new NotSupportedException("Unsupported ENet Connect signature: "+method);
+   if(parameters.Length==2&&parameters[1].ParameterType==typeof(int)){
+    // The updated game negotiates Main, PlayerAvatar and Bulk itself.
+    var count=callSite.index==0?null:code[callSite.index-1];
+    if(count!=null&&callSite.instruction.labels.Count==0&&
+       (count.opcode==OpCodes.Ldc_I4_3||
+        (count.opcode==OpCodes.Ldc_I4_S&&Equals(count.operand,(sbyte)3))||
+        (count.opcode==OpCodes.Ldc_I4&&Equals(count.operand,3))))return null;
+    throw new NotSupportedException("Expected the game to pass a constant three-channel count to ENet Connect(Address, int)");
+   }
+   if(parameters.Length!=1)throw new NotSupportedException("Unsupported ENet Connect signature: "+method);
    var overload=method.DeclaringType.GetMethods().SingleOrDefault(m=>m.Name=="Connect"&&m.GetParameters().Select(p=>p.ParameterType).SequenceEqual(new[]{parameters[0].ParameterType,typeof(int)}));
    if(overload==null||overload.IsStatic||overload.ReturnType!=method.ReturnType)throw new NotSupportedException("Incompatible ENet Connect(Address, int) overload");
+   return overload;
   }
   public static FieldInfo AvatarOwner(MethodBase method){
    var owner=method.DeclaringType.DeclaringType;

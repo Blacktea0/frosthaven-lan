@@ -14,6 +14,9 @@ namespace ENet {
 class FakeBackend {
  [MethodImpl(MethodImplOptions.NoInlining)] public int RenamedJoin(){return new ENet.Host().Connect(new ENet.Address());}
 }
+class BulkChannelBackend {
+ [MethodImpl(MethodImplOptions.NoInlining)] public int RenamedJoin(){return new ENet.Host().Connect(new ENet.Address(),3);}
+}
 class LanChannelsTests {
  static void Require(bool value,string message){if(!value)throw new Exception(message);Console.WriteLine("PASS: "+message);}
  static int Main(){try{
@@ -21,6 +24,9 @@ class LanChannelsTests {
   LanChannels.Install(harmony,typeof(FakeBackend));
   Require(new FakeBackend().RenamedJoin()==2,"structurally discovered renamed LAN join negotiates both main and avatar channels");
   Require(new ENet.Host().Connect(new ENet.Address())==1,"unrelated ENet callers retain their original configuration");
+  var bulkJoin=PatchDiscovery.Connect(typeof(BulkChannelBackend));
+  LanChannels.Install(harmony,bulkJoin);
+  Require(Harmony.GetPatchInfo(bulkJoin)==null&&new BulkChannelBackend().RenamedJoin()==3,"native three-channel join preserves Bulk and needs no patch");
   harmony.UnpatchAll(harmony.Id);
   Require(new FakeBackend().RenamedJoin()==1,"restore removes the channel patch");
   bool refused=false;

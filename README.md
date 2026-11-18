@@ -8,37 +8,41 @@
 
 ## Introduction
 
-A Windows x64 LAN tool for Frosthaven. It enables the built-in ENet backend through in-memory injection without modifying installed game files. The original support baseline is **Retail 1.0.34121 Steam**; updated versions undergo runtime structural checks instead of a fixed DLL hash allowlist. Passing these checks does not mean that a version has undergone real-game or multiplayer validation.
+A third-party launcher for Frosthaven that forces LAN multiplayer mode.
 
-When enabled, the main menu version label ends with `LAN Enabled`, and invite-code UI text uses the host IP instead.
+Frosthaven uses invite codes and peer-to-peer connections for multiplayer. Poor connections can cause several disconnects in one session, even with a gaming VPN. I built this tool with AI so I could play with friends. It lets the game send multiplayer traffic over an existing virtual LAN when players are on different networks.
 
-LAN connections enable both game-message and avatar channels to synchronize players' Steam avatars through the game's existing mechanism. Each player's local Steam client must still successfully retrieve their avatar.
+The launcher enables the game's built-in ENet backend through in-memory injection. It leaves game installation files, saves, and Steam achievements untouched. To play as usual, launch the game from Steam.
 
-Avatars use readable copies of the Steam texture's original pixels at their source dimensions, bypassing the game's fixed 128×128 GPU resize. Network avatars disable mipmaps without changing overall graphics quality. `command status` also reports avatar dimensions, mipmap state and PNG SHA256 to check synchronization consistency.
+The latest supported version is **Retail 1.0.34574 Steam** (build `26755354`). You can try it with newer versions, which may still work if the game's multiplayer implementation remains compatible. If you run into a problem, please open an issue.
 
-See the repository's [PRODUCT.md](https://github.com/Blacktea0/frosthaven-lan/blob/main/PRODUCT.md) for design details, advanced commands, and troubleshooting. It is not included in release ZIPs.
+See [PRODUCT.md](https://github.com/Blacktea0/frosthaven-lan/blob/main/PRODUCT.md) in the repository for technical details and troubleshooting.
 
 ## How to use
 
-1. Install and sign in to Steam, and confirm the game launches normally. Both players need the same game and patch version.
+1. **Install and sign in to Steam**, and confirm the game launches normally. Both players need the same game and patch version.
 2. Download the ZIP from [Releases](https://github.com/Blacktea0/frosthaven-lan/releases/latest) and **extract all files** into a writable folder. Do not copy only the EXE.
 3. Choose a startup mode: **double-click** `frosthaven-lan.exe` normally to launch the game EXE directly, or **right-click → Run as administrator if you need the Steam in-game overlay**, which launches the game through Steam. **The game must be started by this tool.** If it is already running, close all game instances manually, then reopen the tool.
-4. Wait for the message confirming successful injection and forced LAN mode. The host loads a campaign and opens multiplayer from the pause menu.
-5. The client selects Multiplayer → Join Game and enters the host IPv4 address (for example `192.168.1.20`, without a port). The host assigns characters and confirms.
+4. Wait for the message confirming successful injection and forced LAN mode. The host loads a campaign and opens multiplayer from the pause menu, then shares their LAN IPv4 address when prompted.
+5. The client selects Multiplayer → Join Session and enters the host IPv4 address (for example `192.168.1.20`, without a port). The host assigns characters and confirms.
 
-Keep all five runtime files together: `frosthaven-lan.exe`, `LanBridge.dll`, `Bootstrap.dll`, `LanPayload.dll`, and `0Harmony.dll`. The ZIP also includes `README.md`, `README.zh-CN.md`, and `Harmony-LICENSE.txt`.
+Keep all five runtime files together: `frosthaven-lan.exe`, `LanBridge.dll`, `Bootstrap.dll`, `LanPayload.dll`, and `0Harmony.dll`. The ZIP contains these five files and `Harmony-LICENSE.txt`.
 
 To enable the **Steam in-game overlay**, launch this tool as administrator. Standard mode starts the game EXE directly; both modes require the tool to start the game.
 
-Standard mode checks the current local Steam login session before starting the game. If login cannot be confirmed, open Steam and finish signing in before retrying, or use administrator mode to launch through Steam. This check does not guarantee Steam service connectivity or avatar availability.
+Standard mode checks the current Steam login session before starting the game. If it cannot confirm sign-in, open Steam and sign in before retrying, or use administrator mode to launch through Steam.
 
-Allow **UDP 30000** across the network. Other computers must use the host's actual IP rather than the `localhost` shown in the host UI. Steam identity initialization is still required; fully offline startup is unsupported.
+The game uses **UDP 30000** for multiplayer. Make sure your firewall allows traffic on that port.
 
-During startup, the native bridge waits for both the Mono root domain and managed main thread object before attaching the injection thread, avoiding early attachment based only on the Mono DLL or root domain. The wait is limited to 120 seconds; if the game exits during initialization, console diagnostics retain its process exit code in decimal and hexadecimal. Simulated timing tests and limited manual local startup checks have passed; repeated cold-start stress still requires validation.
+### Screenshots
 
-The tool discovers patch methods from EOS backend construction and field assignment, ENet connection calls, and the avatar GPU copy flow, without relying on metadata tokens, coroutine indices, or those method names. Critical signatures and IL structure must match with exactly one candidate; otherwise patch installation stops with full diagnostics. This accommodates updates that retain these structures; substantial changes to backend types, UI interfaces, network protocols, or copy flow may still require a tool update. SHA256 is retained for diagnostics and detecting file changes during startup, and does not prove protocol compatibility.
+The multiplayer notification prompts the host to share their LAN IPv4 address with friends.
 
-Startup stages use an animated spinner. Console language follows the Windows locale: Chinese locales use simplified Chinese, all other locales use English, and failed locale detection defaults to simplified Chinese. On success, the tool exits after ten seconds while the game keeps running. On failure, the console displays the full original error, inner exceptions, stack traces, Windows error codes, and timestamped diagnostic history. Every invocation waits for Enter after failure instead of closing automatically. The tool does not generate log files. After updating the patch, close the game and reopen the tool.
+![Host session manager with the multiplayer notification](docs/screenshots/host-en.png)
+
+The joining player enters the host's IPv4 address. The screenshot uses `10.8.0.2` as an example.
+
+![Join Game dialog with 10.8.0.2 entered](docs/screenshots/join-en.png)
 
 ## Development requirements
 

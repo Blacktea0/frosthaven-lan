@@ -8,6 +8,16 @@ class LanCopyTests {
    foreach(string key in keys){string text=Translate("GUI/"+key,language);if(String.IsNullOrWhiteSpace(text)||text.Contains("邀请码")||text.IndexOf("invite code",StringComparison.OrdinalIgnoreCase)>=0)throw new Exception(language+" "+key);}
   }
   Console.WriteLine("PASS: all host-IP terms cover all 12 game languages");
+  const string started="Default GH Legacy/GUI_NOTIFICATION_MULTIPLAYER_STARTED";
+  const string heading="<color=#CDBF84>Session started!</color>\n";
+  const string original=heading+"Invite friends to your party to continue playing.";
+  string[] locales={"en-GB","de-DE","fr-FR","it-IT","es-ES","pt-BR","hu-HU","ru-RU","zh-CN","zh-TW","ja-JP","ko-KR"};
+  var messages=locales.Select(locale=>Translate(started,locale,original)).ToArray();
+  Require(messages.All(message=>message.StartsWith(heading)&&message.Substring(heading.Length).Contains("IP"))&&messages.Distinct().Count()==locales.Length,"all 12 game languages preserve the heading and supply a localized host IP instruction");
+  Require(messages[8]==heading+"将主机IP发给好友以邀请好友加入","simplified Chinese uses the requested wording");
+  Require(Translate(started,"zh-Hant-HK",original)==messages[9],"notification honors traditional Chinese aliases");
+  Require(Translate(started,"unknown",original)==messages[0],"notification falls back to English");
+  Require(Translate(started,"en",null)==messages[0].Substring(heading.Length),"missing original translation still gives the join instruction");
   Require(Translate("GUI_MULTIPLAYER_INVITE_CODE","zh-CN")=="主机IP","Chinese host IP label");
   Require(Translate("GUI_MULTIPLAYER_INVITE_CODE","zh-Hant")=="主機IP","traditional Chinese language alias");
   Require(Translate("GUI_MULTIPLAYER_INVITE_CODE","unknown")=="Host IP","unknown languages fall back to English");

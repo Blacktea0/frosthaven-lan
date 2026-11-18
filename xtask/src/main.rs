@@ -40,13 +40,10 @@ fn build(root: &Path) -> Result<()> {
     let dist = root.join("dist");
     println!("Game compatibility: runtime structural discovery; no fixed hash allowlist");
     fs::create_dir_all(&dist)?;
-    for (source, name) in [
-        ("README.md", "README.md"),
-        ("README.zh-CN.md", "README.zh-CN.md"),
-        ("vendor/harmony/LICENSE", "Harmony-LICENSE.txt"),
-    ] {
-        fs::copy(root.join(source), dist.join(name))?;
-    }
+    fs::copy(
+        root.join("vendor/harmony/LICENSE"),
+        dist.join("Harmony-LICENSE.txt"),
+    )?;
     fs::copy(
         root.join("vendor/harmony/0Harmony.dll"),
         dist.join("0Harmony.dll"),
@@ -140,6 +137,7 @@ fn test_managed(root: &Path) -> Result<()> {
         if test == "LanUiTests" {
             compiler
                 .arg(root.join(r"managed\LanCopy.cs"))
+                .arg(root.join(r"managed\LanText.cs"))
                 .arg(format!("/r:{}", root.join("target/0Harmony.dll").display()));
         }
         if test == "LanChannelsTests"

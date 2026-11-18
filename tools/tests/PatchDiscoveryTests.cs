@@ -50,6 +50,9 @@ class AmbiguousConnections {
 class AlreadyTwoChannels {
  public int Changed(){return new ENet.Host().Connect(new ENet.Address(),2);}
 }
+class DynamicChannelCount {
+ public int Changed(int count){return new ENet.Host().Connect(new ENet.Address(),count);}
+}
 class GatedNetwork {
  internal static IBackend backend;
  [MethodImpl(MethodImplOptions.NoInlining)] public static void Create(){backend=new Eos(1,"token");}
@@ -94,7 +97,8 @@ class PatchDiscoveryTests {
   Refused(()=>PatchDiscovery.BackendInitialization(typeof(ChangedFlow),typeof(Eos),typeof(Enet),Field(typeof(ChangedFlow))),"changed backend assignment flow is refused");
   Refused(()=>PatchDiscovery.BackendInitialization(typeof(Enet),typeof(Eos),typeof(Enet),null),"missing backend initialization is refused");
   Refused(()=>PatchDiscovery.Connect(typeof(AmbiguousConnections)),"multiple ENet connection candidates are refused");
-  Refused(()=>PatchDiscovery.Connect(typeof(AlreadyTwoChannels)),"changed ENet connection signature is refused");
+  Refused(()=>PatchDiscovery.Connect(typeof(AlreadyTwoChannels)),"unexpected explicit ENet channel count is refused");
+  Refused(()=>PatchDiscovery.Connect(typeof(DynamicChannelCount)),"unverified dynamic ENet channel count is refused");
   var avatar=PatchDiscovery.Avatar(typeof(RenamedAvatarPlayer));
   Require(avatar.Name=="RenamedTick"&&PatchDiscovery.AvatarOwner(avatar).Name=="renamedOwner","renamed avatar state method and owner field are discovered structurally");
   Refused(()=>PatchDiscovery.Avatar(typeof(AmbiguousAvatarPlayer)),"multiple avatar candidates are refused");
